@@ -1,0 +1,57 @@
+.operations-page {
+  display: block;
+  height: auto;
+  min-height: 100vh;
+  overflow: auto;
+  padding: 24px;
+}
+.operations-shell { max-width: 1100px; margin: 0 auto; }
+.operations-header, .operations-section-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+.operations-header { border-bottom: 1px solid var(--border); padding-bottom: 16px; }
+.operations-header h1 { font-size: 18px; margin: 0; }
+.operations-page h2 { font-size: 14px; }
+.operations-section-header h2 { font-size: 14px; margin: 0; }
+.operations-page a { color: var(--fg); }
+.operations-page section { margin-top: 24px; }
+.operations-card { border: 1px solid var(--border); border-radius: 6px; padding: 12px; margin: 12px 0; min-width: 0; }
+.operations-card legend, .operations-muted { color: var(--color-muted); font-size: 11px; }
+.operations-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+.operations-grid > :last-child { grid-column: 1 / -1; }
+.operations-field { display: flex; flex-direction: column; gap: 6px; min-width: 0; font-size: 12px; }
+.operations-field .settings-input { width: 100%; min-width: 0; box-sizing: border-box; }
+.operations-card .cookbook-actions { margin-top: 12px; align-items: center; flex-wrap: wrap; }
+.operations-routing-row { display: grid; grid-template-columns: 1fr 2fr auto; gap: 12px; align-items: end; margin-top: 12px; }
+.operations-status { padding: 12px 0; white-space: pre-wrap; font-size: 12px; }
+.operations-error { color: var(--color-error); }
+.operations-diff { white-space: pre-wrap; overflow-wrap: anywhere; max-height: 400px; overflow: auto; padding: 12px; border: 1px solid var(--border); border-radius: 6px; font-size: 12px; }
+.operations-strategy { max-width: 400px; margin: 12px 0; }
+.operations-page [hidden] { display: none !important; }
+.operations-tabs { margin: 16px 0; }
+.operations-tabs, .operations-page .cookbook-actions { flex-wrap: wrap; gap: 8px; }
+.operations-field { margin-bottom: 12px; }
+.operations-field textarea { min-height: 100px; resize: vertical; }
+.operations-confirm { max-width: 500px; color: var(--fg); background: var(--bg); border: 1px solid var(--border); border-radius: 6px; padding: 20px; }
+.operations-confirm::backdrop { background: #0009; }
+.operations-confirm p { line-height: 1.6; font-size: 12px; overflow-wrap: anywhere; }
+.operations-tabs [aria-pressed="true"] { border-color: var(--red); color: var(--red); }
+.operations-metric-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 12px; }
+.operations-metric { margin: 0; overflow-wrap: anywhere; }
+.operations-metric h3 { font-size: 12px; margin: 0; }
+.operations-metric-value { font-size: 18px; margin: 12px 0; }
+.operations-metric progress { width: 100%; accent-color: var(--red); }
+.operations-table-wrap { overflow: auto; max-height: 400px; }
+.operations-table-wrap table { width: 100%; border-collapse: collapse; font-size: 12px; }
+.operations-table-wrap th, .operations-table-wrap td { padding: 8px; text-align: left; border-bottom: 1px solid var(--border); overflow-wrap: anywhere; }
+.operations-table-wrap th { position: sticky; top: 0; background: var(--bg); }
+@media (max-width: 600px) {
+  .operations-page { padding: 12px; }
+  .operations-grid, .operations-routing-row { grid-template-columns: 1fr; }
+  .operations-grid > :last-child { grid-column: auto; }
+  .operations-routing-row button { justify-self: start; }
+}

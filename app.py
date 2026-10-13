@@ -191,6 +191,8 @@ _TIMEOUT_EXEMPT_PREFIXES = (
     "/api/upload",          # large files
     "/api/image",           # diffusion proxies (inpaint/harmonize/upscale/etc.) — own 120s httpx timeout
     "/api/memory/audit",    # retains own 120s LLM inactivity timeout
+    "/api/operations/litellm/apply",  # host helper bounds restart and recovery
+    "/api/operations/manage",  # bounded host Docker/service controls
 )
 
 
@@ -804,6 +806,9 @@ app.include_router(calendar_router)
 from routes.shell_routes import setup_shell_routes
 app.include_router(setup_shell_routes())
 
+from routes.operations_routes import setup_operations_routes
+app.include_router(setup_operations_routes())
+
 # Cookbook (model download/serve/cache, cookbook state sync)
 from routes.cookbook_routes import setup_cookbook_routes
 app.include_router(setup_cookbook_routes())
@@ -920,6 +925,13 @@ async def serve_calendar(request: Request):
 @app.get("/cookbook")
 async def serve_cookbook(request: Request):
     return await serve_index(request)
+
+
+@app.get("/operations")
+async def serve_operations(request: Request):
+    from core.middleware import require_admin
+    require_admin(request)
+    return serve_html_with_nonce(request, abs_join(BASE_DIR, "static/operations.html"))
 
 @app.get("/email")
 async def serve_email(request: Request):

@@ -1,0 +1,27 @@
+{
+  "containers": ["litellm", "odysseus-odysseus-1", "odysseus-chromadb-1", "odysseus-searxng-1", "odysseus-ntfy-1"],
+  "protected_containers": ["odysseus-odysseus-1"],
+  "services": {},
+  "strata_setup": {
+    "directory": "/home/seth/strata",
+    "config": "strata-iq2_xs.json",
+    "launcher": "run-iq2_xs.sh",
+    "family": "qwen",
+    "model": "IQ2_XS",
+    "service_launcher": "run-dashboard-strata.sh",
+    "models": {
+      "Q2_0": {"config": "strata-q2_0.json", "launcher": "run-q2_0.sh"},
+      "IQ2_XS": {"config": "strata-iq2_xs.json", "launcher": "run-iq2_xs.sh"},
+      "IQ3_XXS": {"config": "strata-iq3_xxs.json", "launcher": "run-iq3_xxs.sh"},
+      "IQ3_S": {"config": "strata-iq3_s.json", "launcher": "run-iq3_s.sh"}
+    },
+    "backend": "hip",
+    "data_directory": "/mnt/ai-models/strata",
+    "port": 8081,
+    "service": "strata",
+    "maximum_context": 1048576
+  },
+  "scripts_root": "/home/seth/ai-scripts",
+  "python": "/home/seth/strata/.venv/bin/python",
+  "jobs_directory": "/home/seth/.local/share/odysseus-operations/jobs"
+}

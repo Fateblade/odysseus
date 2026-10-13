@@ -1344,6 +1344,8 @@ function initializeEventListeners() {
     .then(r => r.json())
     .then(d => {
       window._isAdmin = !!d.is_admin;
+      const operationsButton = el('tool-operations-btn');
+      if (operationsButton) operationsButton.style.display = d.is_admin ? '' : 'none';
       if (d.is_admin && userBarAdmin) userBarAdmin.style.display = '';
       const userBarName = el('user-bar-name');
       const userBarAvatar = el('user-bar-avatar');
