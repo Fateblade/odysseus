@@ -1,19 +1,33 @@
 import { applyColors, applyFontDensity, getSaved } from './theme.js';
-import { closeOverview, openOverview } from './operationsOverview.js?v=20261012overview1';
-import { openManagement, closeManagement } from './operationsManagement.js?v=20261013management3';
+import { closeOverview, openOverview } from './operationsOverview.js?v=20261015workspace1';
+import { openManagement, closeManagement } from './operationsManagement.js?v=20261015workspace1';
 
 const endpoint = '/api/operations/litellm';
 let state = null;
 let reviewed = null;
 let busy = false;
+let currentPanel = null;
+const scrollPositions = new Map();
 
 function selectPanel(name) {
+  const workspace = el('operations-workspace');
+  if (currentPanel) scrollPositions.set(currentPanel, workspace.scrollTop);
+  currentPanel = name;
+  const titles = {
+    overview: ['Host overview', 'Compute, shared memory and inference services.'],
+    litellm: ['Models & routing', 'Manage the deployments and aliases exposed by LiteLLM.'],
+    management: ['Management', 'Control containers, inference servers and resident models.'],
+    jobs: ['Scripts & TPS tests', 'Run benchmarks, inspect output and compare results.'],
+  };
+  el('operations-page-title').textContent = titles[name][0];
+  el('operations-page-description').textContent = titles[name][1];
   const overview = name === 'overview';
   for (const panel of ['overview', 'litellm', 'management', 'jobs']) {
     el(`operations-${panel}-panel`).hidden = panel !== name;
     el(`operations-${panel}-tab`).setAttribute('aria-pressed', String(panel === name));
   }
   el('operations-refresh').hidden = name !== 'litellm';
+  requestAnimationFrame(() => { if (currentPanel === name) workspace.scrollTop = scrollPositions.get(name) || 0; });
   closeManagement();
   if (overview) openOverview();
   else {

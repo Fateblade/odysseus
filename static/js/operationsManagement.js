@@ -39,8 +39,8 @@ function field(parent, id, title, value = '', options = null, type = 'text') {
   return input;
 }
 
-function section(parent, title, description) {
-  const item = node('section', '', 'operations-card');
+function section(parent, title, description, className = '') {
+  const item = node('section', '', `operations-card ${className}`);
   item.append(node('h2', title), node('p', description, 'operations-muted'));
   parent.append(item);
   return item;
@@ -117,7 +117,7 @@ async function manage(payload) {
 }
 
 function controls(parent, title, target, options, operations) {
-  const card = section(parent, title, target === 'docker' ? 'Only containers configured by the host administrator can be changed. The dashboard container is protected.' : 'Controls use explicitly configured systemd units. Strata’s current SSH process must be migrated before server start/stop is enabled.');
+  const card = section(parent, title, target === 'docker' ? 'Start, stop or inspect the containers allowed by your host configuration. The dashboard container is protected.' : 'Control the inference services configured on your host.', `operations-control-${target}`);
   const input = field(card, `operations-${target}-name`, 'Target', options[0] || '', options);
   const row = node('div', '', 'cookbook-actions');
   operations.forEach(operation => {
@@ -141,11 +141,11 @@ function initialize() {
   management.append(content);
   controls(content, 'Docker containers', 'docker', [], ['start', 'stop', 'restart', 'logs']);
   controls(content, 'Inference servers', 'service', [], ['status', 'start', 'stop', 'restart', 'logs']);
-  const strata = section(content, 'Strata model', 'Load or release the configured model while keeping the Strata HTTP server running. Busy requests are not forcibly stopped.');
+  const strata = section(content, 'Strata residency', 'Load the configured model into memory, or release it while keeping the server available. Active requests are not forcibly stopped.', 'operations-strata-residency');
   const strataActions = node('div', '', 'cookbook-actions');
   ['load', 'unload'].forEach(operation => strataActions.append(button(operation, () => task(() => manage({ target: 'strata', operation })))));
   strata.append(strataActions);
-  const configuration = section(content, 'Strata model configuration', 'Choose quantization and context. Setup prepares that variant and its launcher; the managed service then switches to it. New quantizations may download and prepare model files.');
+  const configuration = section(content, 'Strata configuration', 'Choose quantization and context. Applying prepares the model, restarts Strata and verifies the result. New quantizations may need a download.', 'operations-strata-configuration');
   const contextStatus = node('p', 'Loading Strata configuration…', 'operations-status');
   contextStatus.id = 'operations-strata-config-status';
   configuration.append(contextStatus);
@@ -195,7 +195,7 @@ function initialize() {
   };
   context.addEventListener('input', invalidateSetup);
   quantization.addEventListener('change', invalidateSetup);
-  const models = section(content, 'Ollama models', 'Pull, inspect, copy, load or unload models. Loading keeps the model resident for 10 minutes. Pulls run as background jobs.');
+  const models = section(content, 'Ollama models', 'Download, inspect or copy a model. Loading keeps it in memory for 10 minutes; downloads run as jobs.', 'operations-ollama-control');
   field(models, 'operations-model-name', 'Model name', '');
   const suggestions = node('datalist');
   suggestions.id = 'operations-model-suggestions';
@@ -208,10 +208,10 @@ function initialize() {
     destination: el('operations-model-destination').value,
   })))));
   models.append(modelActions);
-  content.append(node('h2', 'Logs and model details'));
+  const outputSection = section(content, 'Logs & model details', 'Select logs, service status or model details to inspect the response.', 'operations-command-output');
   const output = node('pre', 'Select logs, status or model details.', 'operations-diff');
   output.id = 'operations-management-output';
-  content.append(output);
+  outputSection.append(output);
 
   const jobs = el('operations-jobs-panel');
   const message = node('p', '', 'operations-status');
@@ -222,7 +222,7 @@ function initialize() {
   jobsContent.id = 'operations-jobs-content';
   jobsContent.hidden = true;
   jobs.append(jobsContent);
-  const benchmark = section(jobsContent, 'TPS benchmark', 'Measure repeat runs with an optional excluded warmup. TTFT includes queue/load time. Decode TPS uses backend timings; end-to-end TPS includes prefill. No cache clearing is performed.');
+  const benchmark = section(jobsContent, 'TPS benchmark', 'Compare repeated generations with an optional warmup. Decode TPS uses backend timings; end-to-end TPS includes loading, queueing and prefill. Caches are not cleared.', 'operations-benchmark');
   const grid = node('div', '', 'operations-grid');
   benchmark.append(grid);
   field(grid, 'operations-benchmark-backend', 'Backend', 'ollama', ['ollama', 'strata']);
@@ -244,7 +244,7 @@ function initialize() {
     await refreshJobs();
     status('Benchmark started.');
   })));
-  const scripts = section(jobsContent, 'Python scripts', 'Save and run existing .py files from the configured host scripts folder. Arguments are a JSON array, executed without a shell. Scripts may write structured results to ODYSSEUS_JOB_RESULT_PATH.');
+  const scripts = section(jobsContent, 'Python scripts', 'Save a definition for a script in your host scripts folder, then run it with its saved arguments and timeout.', 'operations-scripts');
   scripts.id = 'operations-scripts-card';
   const scriptGrid = node('div', '', 'operations-grid');
   scripts.append(scriptGrid);
@@ -264,12 +264,14 @@ function initialize() {
   const scriptList = node('div');
   scriptList.id = 'operations-script-list';
   scripts.append(scriptList);
-  const history = section(jobsContent, 'Jobs and benchmark comparison', 'One host job runs at a time. Jobs survive dashboard restarts; interrupted workers are recorded rather than silently rerun. Rates below are medians.');
+  const history = section(jobsContent, 'Jobs & benchmark comparison', 'One host job runs at a time. History survives dashboard restarts. Benchmark rates below are medians.', 'operations-history');
   history.append(button('Refresh jobs', () => task(refreshJobs)));
   const list = node('div', '', 'operations-table-wrap');
   list.id = 'operations-job-list';
   history.append(list);
-  const detail = section(jobsContent, 'Job output', 'Choose a job to inspect its logs and full result.');
+  const detail = section(jobsContent, 'Job output', 'Choose a job above to inspect its logs and full result.', 'operations-job-detail');
+  const detailActions = node('div', '', 'cookbook-actions');
+  detail.append(detailActions);
   const cancel = button('Cancel selected job', () => task(async () => {
     if (!selectedJob) throw new Error('Select an active job first.');
     if (await confirmOperation('Cancel the selected host job? The worker will terminate its child process. Backend downloads or generations may take time to stop.')) {
@@ -279,7 +281,7 @@ function initialize() {
     }
   }));
   cancel.id = 'operations-job-cancel';
-  detail.append(cancel, button('Export result JSON', () => task(async () => {
+  detailActions.append(cancel, button('Export result JSON', () => task(async () => {
     if (!selectedJob) throw new Error('Select a job first.');
     const result = await request('jobs/detail', { id: selectedJob });
     const url = URL.createObjectURL(new Blob([JSON.stringify(result.job, null, 2)], { type: 'application/json' }));
@@ -290,7 +292,11 @@ function initialize() {
   log.id = 'operations-job-output';
   const result = node('pre', '', 'operations-diff');
   result.id = 'operations-job-result';
-  detail.append(log, result);
+  const logStream = node('div', '', 'operations-job-stream');
+  const resultStream = node('div', '', 'operations-job-stream');
+  logStream.append(node('h3', 'Output log'), log);
+  resultStream.append(node('h3', 'Result JSON'), result);
+  detail.append(logStream, resultStream);
 }
 
 function options(input, values) {

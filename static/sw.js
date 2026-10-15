@@ -7,7 +7,7 @@
 //   - Other static assets (images/fonts/libs): cache-first with bg refresh.
 //   - API / non-GET: never cached.
 // Bump CACHE_NAME whenever the precache list or SW logic changes.
-const CACHE_NAME = 'odysseus-v663-strata-models';
+const CACHE_NAME = 'odysseus-v664-operations-workspace';
 
 // KaTeX resolves these from its own stylesheet, so caching the CSS without them
 // gives offline math fallback glyphs instead of proper typesetting.
@@ -87,10 +87,10 @@ const PRECACHE = [
   '/static/js/chatStream.js?v=20260914pdfstrip1',
   '/static/js/chat.js?v=20260917toolttft1',
   '/static/js/cookbook.js',
-  '/static/js/operations.js?v=20261012operations1',
-  '/static/js/operationsOverview.js?v=20261012overview1',
-  '/static/js/operationsManagement.js?v=20261013management3',
-  '/static/css/operations.css?v=20261012operations1',
+  '/static/js/operations.js?v=20261015workspace1',
+  '/static/js/operationsOverview.js?v=20261015workspace1',
+  '/static/js/operationsManagement.js?v=20261015workspace1',
+  '/static/css/operations.css?v=20261015workspace1',
   '/static/js/search-chat.js',
   '/static/js/compare/index.js?v=20260909mobilepaneaddscroll1',
   '/static/js/compare/vote.js?v=20260828resendcaldrag1',
