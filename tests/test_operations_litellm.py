@@ -56,6 +56,37 @@ def test_review_and_edit_preserve_credentials_comments_and_unknown_settings():
     assert review(CONFIG, draft)["changed"] is True
 
 
+def test_drop_parameters_round_trip_review_and_clear_preserve_other_settings():
+    draft = snapshot(CONFIG)["draft"]
+    assert candidate(CONFIG, draft)[0] == CONFIG
+    draft["models"][0]["additional_drop_params"] = ["reasoning_effort", "thinking"]
+    edited, config = candidate(CONFIG, draft)
+    params = config["model_list"][0]["litellm_params"]
+    assert params["additional_drop_params"] == ["reasoning_effort", "thinking"]
+    assert params["api_key"] == "secret-provider-key"
+    assert params["timeout"] == 90
+    assert "additional_drop_params" not in config["model_list"][1]["litellm_params"]
+    checked = review(CONFIG, draft)
+    assert "reasoning_effort" in checked["diff"]
+    assert "secret-provider-key" not in checked["diff"]
+    loaded = snapshot(edited)["draft"]
+    assert loaded["models"][0]["additional_drop_params"] == ["reasoning_effort", "thinking"]
+    assert candidate(edited, loaded)[0] == edited
+    old_client = copy.deepcopy(loaded)
+    old_client["models"][0].pop("additional_drop_params")
+    assert candidate(edited, old_client)[0] == edited
+    loaded["models"][0]["additional_drop_params"] = []
+    assert "additional_drop_params" not in candidate(edited, loaded)[1]["model_list"][0]["litellm_params"]
+
+
+@pytest.mark.parametrize("value", ["thinking", {"thinking": True}, [""], ["bad name"], ["bad\nname"], [42], ["a"] * 101])
+def test_drop_parameters_reject_invalid_values(value):
+    draft = snapshot(CONFIG)["draft"]
+    draft["models"][0]["additional_drop_params"] = value
+    with pytest.raises(OperationsError, match="Parameters to drop"):
+        candidate(CONFIG, draft)
+
+
 def test_apply_requires_current_revision_and_exact_review(tmp_path):
     path = tmp_path / "config.yaml"
     path.write_bytes(CONFIG)

@@ -139,6 +139,14 @@ function renderModels() {
       field('Backend model', row.model, value => { row.model = value; }),
       field('Endpoint URL', row.api_base, value => { row.api_base = value; }),
     );
+    const dropped = field('Parameters to drop (comma-separated)', (row.additional_drop_params || []).join(', '), value => {
+      row.additional_drop_params = value.split(',').map(name => name.trim()).filter(Boolean);
+    });
+    const hint = document.createElement('span');
+    hint.className = 'operations-muted';
+    hint.textContent = 'Removed before forwarding this deployment’s requests. For non-thinking Qwen3-Coder: reasoning_effort, thinking. Leave empty to keep parameters.';
+    dropped.append(hint);
+    fields.append(dropped);
     const actions = document.createElement('div');
     actions.className = 'cookbook-actions';
     actions.append(
@@ -245,7 +253,7 @@ el('operations-refresh').addEventListener('click', () => {
   task(load, 'Loading LiteLLM configuration…');
 });
 el('operations-add-model').addEventListener('click', () => {
-  state.draft.models.push({ index: null, model_name: '', model: '', api_base: '' });
+  state.draft.models.push({ index: null, model_name: '', model: '', api_base: '', additional_drop_params: [] });
   invalidate();
   renderModels();
   el('operations-models').lastElementChild.querySelector('input').focus();

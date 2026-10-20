@@ -74,6 +74,16 @@ def identifier(value, label):
     return value.strip()
 
 
+def drop_parameters(value):
+    if value is None:
+        return []
+    if (not isinstance(value, list) or len(value) > 100
+            or any(not isinstance(name, str) or not name or len(name) > 512
+                   or any(char.isspace() or ord(char) < 32 for char in name) for name in value)):
+        raise OperationsError("Parameters to drop must be a list of at most 100 non-empty names without whitespace or control characters.")
+    return list(value)
+
+
 def view(config):
     rows = []
     for index, row in enumerate(config["model_list"]):
@@ -82,6 +92,7 @@ def view(config):
             "index": index, "model_name": row.get("model_name", ""),
             "model": params.get("model", ""),
             "api_base": public_url(params.get("api_base")),
+            "additional_drop_params": drop_parameters(params.get("additional_drop_params")),
             "credentials_configured": bool(params.get("api_key")) and params.get("api_key") != "not-needed",
         })
     router = config.get("router_settings", {})
@@ -131,6 +142,14 @@ def candidate(raw, draft):
         if index is None and not model.startswith(("openai/", "ollama/", "ollama_chat/")):
             raise OperationsError("New deployments support openai/, ollama/ or ollama_chat/ backends.")
         params["model"] = model
+        if "additional_drop_params" in requested:
+            dropped = drop_parameters(requested["additional_drop_params"])
+            previous = drop_parameters(params.get("additional_drop_params"))
+            if dropped != previous:
+                if dropped:
+                    params["additional_drop_params"] = dropped
+                else:
+                    params.pop("additional_drop_params", None)
         base = requested.get("api_base", "")
         if base == UNCHANGED:
             if index is None or original_view["models"][index]["api_base"] != UNCHANGED:
