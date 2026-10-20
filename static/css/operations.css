@@ -90,9 +90,16 @@ body.operations-page { --operations-muted: color-mix(in srgb, var(--fg) 68%, var
 #operations-thermals td:last-child { text-align: right; white-space: nowrap; font-variant-numeric: tabular-nums; }
 #operations-loaded-models { margin-bottom: 8px; padding-top: 0; }
 .operations-control-docker, .operations-control-service { grid-column: span 6; }
-.operations-strata-residency { grid-column: 1 / span 4; grid-row: 2; }
+.operations-strata-residency { grid-column: 1 / span 6; grid-row: 2; }
+.operations-ollama-residency { grid-column: 7 / -1; grid-row: 2; }
 .operations-ollama-control { grid-column: 1 / span 4; grid-row: 3; }
-.operations-strata-configuration { grid-column: 5 / -1; grid-row: 2 / span 2; }
+.operations-strata-configuration { grid-column: 5 / -1; grid-row: 3; }
+.operations-residency-state { font-weight: 600; }
+.operations-residency-facts { display: grid; grid-template-columns: minmax(100px, 1fr) minmax(0, 2fr); gap: 8px 16px; font-size: 12px; }
+.operations-residency-facts dt { color: var(--operations-muted); }
+.operations-residency-facts dd { margin: 0; overflow-wrap: anywhere; font-variant-numeric: tabular-nums; }
+.operations-resident-model + .operations-resident-model { border-top: 1px solid var(--border); margin-top: 16px; padding-top: 16px; }
+#operations-model-summary summary { cursor: pointer; }
 .operations-command-output { grid-column: 1 / -1; }
 .operations-card > .operations-muted { margin-bottom: 20px; }
 .operations-card > .cookbook-actions { margin-top: 16px; }
@@ -140,7 +147,7 @@ body.operations-page { --operations-muted: color-mix(in srgb, var(--fg) 68%, var
   .operations-benchmark, .operations-scripts { grid-column: span 6; }
 }
 @media (max-width: 900px) {
-  .operations-memory-panel, .operations-thermal-panel, .operations-strata-residency, .operations-strata-configuration, .operations-benchmark, .operations-scripts { grid-column: 1 / -1; }
+  .operations-memory-panel, .operations-thermal-panel, .operations-strata-residency, .operations-ollama-residency, .operations-strata-configuration, .operations-benchmark, .operations-scripts { grid-column: 1 / -1; }
   .operations-metric-grid { grid-template-columns: 1fr; }
   #operations-services .operations-metric { padding: 16px 0; border-left: 0; border-top: 1px solid var(--border); }
   #operations-services .operations-metric:first-child { padding-top: 0; border-top: 0; }

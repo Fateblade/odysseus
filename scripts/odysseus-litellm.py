@@ -32,7 +32,7 @@ def main():
         if payload.get("action") == "overview":
             from services.operations.overview import collect
             result = collect(args.base_url, args.strata_url, args.ollama_url, args.physical_memory_gib)
-        elif payload.get("action") in ("management", "manage", "jobs", "job_detail", "job_start", "job_cancel", "script_save", "strata_config", "strata_preview", "strata_apply"):
+        elif payload.get("action") in ("management", "residency", "manage", "jobs", "job_detail", "job_start", "job_cancel", "script_save", "strata_config", "strata_preview", "strata_apply"):
             from services.operations.management import Management
             management = Management(args.management_config, args.strata_url, args.ollama_url)
             if payload["action"].startswith("strata_"):
@@ -41,6 +41,8 @@ def main():
                 result = operation(management) if payload["action"] == "strata_config" else operation(management, payload)
             elif payload["action"] == "management":
                 result = management.catalog()
+            elif payload["action"] == "residency":
+                result = management.residency()
             elif payload["action"] == "manage":
                 result = management.execute(payload)
             else:

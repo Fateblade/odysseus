@@ -3,6 +3,8 @@
 import json
 import re
 import subprocess
+import time
+from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 from urllib.error import HTTPError, URLError
 from urllib.request import Request, build_opener
@@ -45,6 +47,15 @@ class Management:
                 "services": self.settings.get("services", {}),
                 "scripts_enabled": bool(self.settings.get("scripts_root")),
                 "configured": True}
+
+    def residency(self):
+        from services.operations.overview import ollama, strata
+
+        with ThreadPoolExecutor(max_workers=2) as executor:
+            strata_result = executor.submit(strata, self.strata_url)
+            ollama_result = executor.submit(ollama, self.ollama_url)
+            return {"configured": True, "strata": strata_result.result(),
+                    "ollama": ollama_result.result(), "sampled_at": time.time()}
 
     def service(self, name, operation, check=True):
         setting = self.settings.get("services", {}).get(name)

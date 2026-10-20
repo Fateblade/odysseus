@@ -51,6 +51,10 @@ def setup_operations_routes(service=None):
     async def get_management(request: Request):
         return await invoke(request, "management")
 
+    @router.get("/residency")
+    async def get_residency(request: Request):
+        return await invoke(request, "residency")
+
     @router.post("/manage")
     async def manage_host(request: Request):
         return await invoke(request, "manage")

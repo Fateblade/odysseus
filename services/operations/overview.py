@@ -144,7 +144,7 @@ def ollama(base_url):
             data = get_json(base_url.rstrip("/") + path)
             result[key] = [{"name": row.get("name") or row.get("model"), "digest": row.get("digest"),
                             "size_bytes": row.get("size"), "gpu_bytes": row.get("size_vram"),
-                            "context_length": row.get("context_length")}
+                            "context_length": row.get("context_length"), "expires_at": row.get("expires_at")}
                            for row in data.get("models", [])]
             result[key + "_available"] = True
         except Exception:

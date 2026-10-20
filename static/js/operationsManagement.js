@@ -8,6 +8,7 @@ let initialized = false;
 let pendingPanel = null;
 let strataState = null;
 let strataReview = null;
+let residencyVersion = 0;
 
 function node(tag, text = '', className = '') {
   const item = document.createElement(tag);
@@ -44,6 +45,86 @@ function section(parent, title, description, className = '') {
   item.append(node('h2', title), node('p', description, 'operations-muted'));
   parent.append(item);
   return item;
+}
+
+const tokens = value => Number.isFinite(value) && value > 0 ? `${value.toLocaleString()} tokens` : 'Not reported';
+const memory = value => Number.isFinite(value) ? `${(value / 1024 ** 3).toFixed(2)} GiB` : 'Not reported';
+
+function facts(parent, values) {
+  const list = node('dl', '', 'operations-residency-facts');
+  values.forEach(([label, value]) => list.append(node('dt', label), node('dd', value ?? 'Not reported')));
+  parent.append(list);
+}
+
+function modelSummary(name, details) {
+  const summary = el('operations-model-summary');
+  summary.replaceChildren(node('h3', name));
+  const info = details.model_info || {};
+  const contexts = Object.entries(info).filter(([key]) => key.endsWith('.context_length'));
+  facts(summary, [
+    ['Family', details.details?.family], ['Parameters', details.details?.parameter_size],
+    ['Quantization', details.details?.quantization_level],
+    ['Model context ceiling', contexts.length ? contexts.map(([, value]) => tokens(value)).join(', ') : 'Not reported'],
+    ['Capabilities', details.capabilities?.join(', ') || 'Not reported'],
+  ]);
+  summary.append(node('p', 'The model ceiling is not the allocated runtime context. Check Ollama residency for the live allocation.', 'operations-muted'));
+  const raw = node('details');
+  raw.append(node('summary', 'Full model details'), node('pre', JSON.stringify(details, null, 2), 'operations-diff'));
+  summary.append(raw);
+}
+
+function renderResidency(data) {
+  const strata = data.strata || {};
+  const host = el('operations-strata-live');
+  const reachable = ['ok', 'degraded'].includes(strata.status);
+  const state = !reachable ? 'Unknown — server unreachable' : strata.loaded === true ? 'Loaded in memory' : strata.loaded === false ? 'Unloaded' : 'Residency not reported';
+  host.replaceChildren(node('p', state, 'operations-residency-state'));
+  facts(host, [['Server', reachable ? strata.status === 'ok' ? 'Ready' : 'Degraded' : 'Unavailable'],
+    ['Reported model', strata.model], ['Runtime context', tokens(strata.max_context)],
+    ['Engine state', strata.state], ['Queued requests', strata.queued]]);
+  if (!reachable) host.append(node('p', strata.message || 'Unable to read live status.', 'operations-error'));
+  const ollama = data.ollama || {};
+  const list = el('operations-ollama-live');
+  list.replaceChildren();
+  if (!ollama.loaded_available) {
+    list.append(node('p', 'Loaded models unknown — inventory unavailable.', 'operations-error'));
+  } else if (!ollama.loaded?.length) {
+    list.append(node('p', 'No models loaded in memory.', 'operations-muted'));
+  } else {
+    for (const model of ollama.loaded) {
+      const item = node('article', '', 'operations-resident-model');
+      item.append(node('h3', model.name));
+      const expiry = Date.parse(model.expires_at);
+      const remaining = expiry - data.sampled_at * 1000;
+      const expires = !Number.isFinite(expiry) ? 'Not reported' : new Date(expiry).getUTCFullYear() >= 9999 ? 'Kept loaded' :
+        `${new Date(expiry).toLocaleString()} (${remaining > 0 ? `about ${Math.ceil(remaining / 60000)} min remaining` : 'expiry reached; awaiting backend update'})`;
+      facts(item, [['Status', 'Loaded in memory'], ['Runtime context', tokens(model.context_length)],
+        ['Runtime allocation', memory(model.size_bytes)], ['GPU allocation', memory(model.gpu_bytes)], ['Keep-alive expiry', expires]]);
+      list.append(item);
+    }
+  }
+  if (ollama.installed_available) {
+    el('operations-model-suggestions').replaceChildren(...(ollama.installed || []).map(model => {
+      const option = node('option'); option.value = model.name; return option;
+    }));
+  }
+  const sampled = Number.isFinite(data.sampled_at) ? new Date(data.sampled_at * 1000).toLocaleTimeString() : 'Unknown';
+  for (const id of ['operations-strata-sampled', 'operations-ollama-sampled']) {
+    el(id).textContent = `Last sampled: ${sampled}. Refreshes every 5 seconds while this tab is visible.`;
+  }
+}
+
+async function refreshResidency() {
+  const version = ++residencyVersion;
+  try {
+    const result = await request('residency');
+    if (version !== residencyVersion) return;
+    renderResidency(result);
+  } catch (error) {
+    if (version !== residencyVersion) return;
+    renderResidency({ strata: { message: error.message } });
+    for (const id of ['operations-strata-sampled', 'operations-ollama-sampled']) el(id).textContent = `Live refresh failed: ${error.message}`;
+  }
 }
 
 function status(message, error = false) {
@@ -109,11 +190,13 @@ async function manage(payload) {
   const result = await request('manage', payload);
   status(result.job ? 'Host job started. Follow its progress in Scripts & TPS tests.' : 'Operation completed.');
   if (result.log !== undefined) el('operations-management-output').textContent = result.log || 'No log output.';
-  if (result.details) el('operations-management-output').textContent = JSON.stringify(result.details, null, 2);
+  if (result.details && payload.target === 'ollama' && payload.operation === 'show') modelSummary(payload.name, result.details);
+  else if (result.details) el('operations-management-output').textContent = JSON.stringify(result.details, null, 2);
   if (result.job) {
     selectedJob = result.job.id;
     el('operations-jobs-tab').click();
   }
+  if (active === 'management') await refreshResidency();
 }
 
 function controls(parent, title, target, options, operations) {
@@ -142,7 +225,13 @@ function initialize() {
   controls(content, 'Docker containers', 'docker', [], ['start', 'stop', 'restart', 'logs']);
   controls(content, 'Inference servers', 'service', [], ['status', 'start', 'stop', 'restart', 'logs']);
   const strata = section(content, 'Strata residency', 'Load the configured model into memory, or release it while keeping the server available. Active requests are not forcibly stopped.', 'operations-strata-residency');
+  const strataLive = node('div', 'Reading live status…');
+  strataLive.id = 'operations-strata-live';
+  const strataSampled = node('p', '', 'operations-muted');
+  strataSampled.id = 'operations-strata-sampled';
+  strata.append(strataLive, strataSampled);
   const strataActions = node('div', '', 'cookbook-actions');
+  strataActions.append(button('Refresh status', () => task(refreshResidency)));
   ['load', 'unload'].forEach(operation => strataActions.append(button(operation, () => task(() => manage({ target: 'strata', operation })))));
   strata.append(strataActions);
   const configuration = section(content, 'Strata configuration', 'Choose quantization and context. Applying prepares the model, restarts Strata and verifies the result. New quantizations may need a download.', 'operations-strata-configuration');
@@ -208,6 +297,16 @@ function initialize() {
     destination: el('operations-model-destination').value,
   })))));
   models.append(modelActions);
+  const summary = node('div');
+  summary.id = 'operations-model-summary';
+  models.append(summary);
+  const loaded = section(content, 'Ollama residency', 'Live models currently held in memory. Installed models appear in the model-name suggestions; installation alone does not mean a model is loaded.', 'operations-ollama-residency');
+  const ollamaLive = node('div', 'Reading loaded models…');
+  ollamaLive.id = 'operations-ollama-live';
+  const ollamaSampled = node('p', '', 'operations-muted');
+  ollamaSampled.id = 'operations-ollama-sampled';
+  loaded.append(ollamaLive, ollamaSampled, button('Refresh loaded models', () => task(refreshResidency)));
+  content.insertBefore(loaded, configuration);
   const outputSection = section(content, 'Logs & model details', 'Select logs, service status or model details to inspect the response.', 'operations-command-output');
   const output = node('pre', 'Select logs, status or model details.', 'operations-diff');
   output.id = 'operations-management-output';
@@ -319,16 +418,10 @@ async function refreshManagement() {
   status(result.demo ? 'Preview data — controls are simulated.' : 'Host controls ready.');
   const draft = strataState && (el('operations-strata-quantization').value !== strataState.model || Number(el('operations-strata-context').value) !== strataState.configured_context);
   if (!strataState || (!draft && !strataReview)) await loadStrata();
-  try {
-    const overview = await request('overview');
-    const models = overview.ollama?.installed || [];
-    el('operations-model-suggestions').replaceChildren(...models.map(model => {
-      const option = node('option'); option.value = model.name; return option;
-    }));
-    el('operations-benchmark-backend').onchange = () => {
-      if (el('operations-benchmark-backend').value === 'strata') el('operations-benchmark-model').value = overview.strata?.model || '';
-    };
-  } catch {}
+  await refreshResidency();
+  el('operations-benchmark-backend').onchange = () => {
+    if (el('operations-benchmark-backend').value === 'strata') el('operations-benchmark-model').value = strataState?.active_model || '';
+  };
 }
 
 async function loadStrata() {
@@ -342,7 +435,7 @@ async function loadStrata() {
     options(el('operations-strata-quantization'), (strataState.models || [{ name: strataState.model }]).map(model => model.name));
     el('operations-strata-quantization').value = strataState.model;
     el('operations-strata-quantization').dispatchEvent(new Event('change'));
-    el('operations-strata-config-status').textContent = `Configured: ${strataState.model} · ${strataState.configured_context} tokens\nActive: ${strataState.active_model ?? 'unavailable'} · ${strataState.active_context ?? 'unavailable'} tokens\n${strataState.family} · ${strataState.backend} · port ${strataState.port}\n` +
+    el('operations-strata-config-status').textContent = `Configured: ${strataState.model} · ${strataState.configured_context} tokens\n${strataState.family} · ${strataState.backend} · port ${strataState.port}\n` +
       (strataState.restart_available ? `Generated launcher: ${strataState.launcher}` : 'Configure a Strata service that executes the generated launcher before applying.');
   } catch (error) {
     strataState = null;
@@ -410,19 +503,20 @@ async function refreshJobs() {
 }
 
 async function poll() {
-  if (active !== 'jobs' || document.hidden || polling || busy) return;
+  if (!active || document.hidden || polling || busy) return;
   polling = true;
-  try { await refreshJobs(); }
+  try { await (active === 'management' ? refreshResidency() : refreshJobs()); }
   catch (error) { status(error.message, true); }
   finally { polling = false; }
 }
 
 export function openManagement(panel) {
   initialize();
+  clearInterval(timer);
   active = panel;
   if (busy) pendingPanel = panel;
   else task(panel === 'management' ? refreshManagement : refreshJobs);
-  if (panel === 'jobs') timer = setInterval(poll, 5000);
+  timer = setInterval(poll, 5000);
 }
 
 export function closeManagement() {
@@ -430,4 +524,5 @@ export function closeManagement() {
   timer = null;
   active = null;
   pendingPanel = null;
+  residencyVersion++;
 }
