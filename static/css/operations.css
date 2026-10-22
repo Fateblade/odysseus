@@ -197,3 +197,8 @@ body.operations-page { --operations-muted: color-mix(in srgb, var(--fg) 68%, var
   .operations-table-wrap th, .operations-table-wrap td { padding: 8px; }
 }
 @media (prefers-reduced-motion: reduce) { .operations-page, .operations-page * { scroll-behavior: auto; transition: none; } }
+
+#operations-processes td { overflow-wrap: anywhere; max-width: 320px; }
+#operations-processes details { display: block; padding: 8px; background: var(--panel); color: var(--fg); border-color: var(--border); }
+#operations-processes details p { margin: 6px 0; color: var(--fg); }
+#operations-processes summary { padding: 0; cursor: pointer; background: transparent; color: var(--fg); }

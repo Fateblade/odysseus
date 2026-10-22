@@ -1,6 +1,7 @@
 """Bounded, read-only Linux process samples and gateway activity."""
 
 import os
+import re
 import time
 from pathlib import Path
 
@@ -51,10 +52,18 @@ def process_snapshot(proc_root=Path("/proc")):
             fields = raw.rsplit(")", 1)[1].split()
             if fields[0] == "Z":
                 continue
-            units = [part for line in (read_text(process / "cgroup") or "").splitlines()
+            cgroup = read_text(process / "cgroup") or ""
+            container = re.search(r"(?:^|/)(?:docker-([a-f0-9]{64})\.scope|docker/([a-f0-9]{64}))(?:/|$)", cgroup, re.MULTILINE)
+            try:
+                executable = os.readlink(process / "exe")[:512]
+            except OSError:
+                executable = None
+            units = [part for line in cgroup.splitlines()
                      for part in line.split("/") if part.endswith((".service", ".scope"))]
             result[int(process.name)] = {
                 "pid": int(process.name), "name": name[:120], "state": fields[0],
+                "parent_pid": int(fields[1]), "executable": executable,
+                "container_id": next((part for part in container.groups() if part), None) if container else None,
                 "cpu_ticks": int(fields[11]) + int(fields[12]), "identity": fields[19],
                 "rss_pages": max(0, int(fields[21])), "threads": int(fields[17]),
                 "unit": units[-1][:160] if units else None, "gpu_clients": gpu_clients(process),
@@ -81,6 +90,8 @@ def process_usage(first, second, elapsed, ticks, page_size):
                     gpu_ns += max(0, value - previous["engines"][engine])
         allocations = [c["vram_bytes"] for c in current["gpu_clients"].values() if c["vram_bytes"] is not None]
         rows.append({"pid": pid, "name": current["name"], "state": current["state"], "unit": current["unit"],
+                     "parent_pid": current.get("parent_pid"), "executable": current.get("executable"),
+                     "container_id": current.get("container_id"),
                      "threads": current["threads"], "cpu_percent": round(cpu, 1) if cpu is not None else None,
                      "rss_bytes": current["rss_pages"] * page_size,
                      "gpu_engine_percent": round(gpu_ns / elapsed / 1e9 * 100, 1) if measured else None,
@@ -90,6 +101,19 @@ def process_usage(first, second, elapsed, ticks, page_size):
         for row in sorted(rows, key=lambda row: row[key] or 0, reverse=True)[:count]:
             selected[row["pid"]] = row
     return sorted(selected.values(), key=lambda row: row["cpu_percent"] or 0, reverse=True)
+
+
+def associate_containers(processes, containers):
+    inventory = containers.get("items", []) if containers.get("status") == "ok" else []
+    for process in processes.get("items", []):
+        container_id = process.get("container_id")
+        if not container_id:
+            continue
+        matches = [row for row in inventory if isinstance(row.get("id"), str)
+                   and len(row["id"]) >= 12 and container_id.startswith(row["id"])]
+        if len(matches) == 1:
+            process["container"] = {key: matches[0].get(key) for key in ("id", "name", "image")}
+    return processes
 
 
 def processes():

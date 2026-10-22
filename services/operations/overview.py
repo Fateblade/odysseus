@@ -130,14 +130,14 @@ def containers():
     if running_in_container() and not host_docker_access_enabled():
         return {"status": "unavailable", "message": "Host Docker access is not configured.", "items": []}
     try:
-        result = subprocess.run(["docker", "ps", "-a", "--format", "{{json .}}"],
+        result = subprocess.run(["docker", "ps", "-a", "--no-trunc", "--format", "{{json .}}"],
                                 capture_output=True, timeout=5, text=True)
         if result.returncode:
             raise OSError()
         items = []
         for line in result.stdout.splitlines():
             row = json.loads(line)
-            items.append({"name": row.get("Names"), "image": row.get("Image"),
+            items.append({"id": row.get("ID"), "name": row.get("Names"), "image": row.get("Image"),
                           "state": row.get("State"), "status": row.get("Status"), "ports": row.get("Ports")})
         return {"status": "ok", "items": items}
     except (OSError, ValueError, subprocess.TimeoutExpired):
@@ -204,7 +204,7 @@ def litellm(base_url):
 
 
 def collect(base_url, strata_url, ollama_url, physical_memory_gib=0, config_path="", container="litellm", dwarfstar_url=""):
-    from services.operations.activity import processes, gateway_activity
+    from services.operations.activity import processes, gateway_activity, associate_containers
     from services.operations.dwarfstar import inventory
     from src.host_docker_access import running_in_container
     if platform.system() != "Linux" or running_in_container():
@@ -222,4 +222,5 @@ def collect(base_url, strata_url, ollama_url, physical_memory_gib=0, config_path
                 result[name] = future.result()
             except Exception:
                 result[name] = {"status": "unavailable", "message": "This source could not be sampled."}
+    associate_containers(result.get("processes", {}), result.get("containers", {}))
     return result

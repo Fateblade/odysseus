@@ -106,13 +106,41 @@ function action(label, target) {
 const seconds = value => Number.isFinite(value) ? `${value.toFixed(1)} s` : 'Unavailable';
 const timestamp = value => Number.isFinite(value) ? new Date(value * 1000).toLocaleTimeString() : 'Unavailable';
 
+function processDetails(row) {
+  const details = node('details');
+  details.append(node('summary', row.name));
+  details.append(node('p', `Executable: ${row.executable || 'Unavailable'}`, 'operations-muted'));
+  details.append(node('p', `Parent PID: ${row.parent_pid ?? 'Unavailable'}`, 'operations-muted'));
+  return details;
+}
+
+function processOwner(row) {
+  const owner = node('div');
+  if (row.container) {
+    owner.append(node('strong', row.container.name || 'Unnamed container'));
+    owner.append(node('p', row.container.image || 'Image unavailable', 'operations-muted'));
+  } else if (row.container_id) {
+    owner.append(node('strong', `Docker ${row.container_id.slice(0, 12)} · name unavailable`));
+  } else {
+    owner.append(node('span', row.unit || 'No service identified'));
+  }
+  if (row.container_id) {
+    const details = node('details');
+    details.append(node('summary', 'Container ID and scope'));
+    details.append(node('p', row.container_id, 'operations-muted'));
+    details.append(node('p', row.unit || 'Scope unavailable', 'operations-muted'));
+    owner.append(details);
+  }
+  return owner;
+}
+
 function renderProcesses(processes) {
   processState = processes;
   const sort = el('operations-process-sort').value;
   const rows = [...(processes.items || [])].sort((a, b) => (b[sort] ?? -1) - (a[sort] ?? -1)).slice(0, 30);
   const states = { R: 'Running', S: 'Sleeping', D: 'I/O wait', T: 'Stopped', t: 'Tracing stop', I: 'Idle' };
-  table('operations-processes', ['PID', 'Process', 'Service / scope', 'State', 'CPU', 'RAM (RSS)', 'GPU engines', 'GPU memory', 'Threads'], rows.map(row => [
-    row.pid, row.name, row.unit || 'â€”', states[row.state] || row.state, percent(row.cpu_percent), gib(row.rss_bytes),
+  table('operations-processes', ['PID', 'Process', 'Container / service', 'State', 'CPU', 'RAM (RSS)', 'GPU engines', 'GPU memory', 'Threads'], rows.map(row => [
+    row.pid, processDetails(row), processOwner(row), states[row.state] || row.state, percent(row.cpu_percent), gib(row.rss_bytes),
     Number.isFinite(row.gpu_engine_percent) ? percent(row.gpu_engine_percent) : 'Not reported',
     Number.isFinite(row.gpu_vram_bytes) ? gib(row.gpu_vram_bytes) : 'Not reported', row.threads,
   ]), processes.message || 'No process readings available.');

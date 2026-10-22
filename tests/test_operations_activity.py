@@ -103,3 +103,54 @@ def test_missing_ollama_target_is_visible_without_granting_control():
     result = Management(None, "http://strata", "http://ollama").catalog()
     assert "ollama" in result["unconfigured_services"]
     assert "ollama" not in result["services"]
+
+
+def test_process_docker_scope_includes_identity_and_executable(tmp_path, monkeypatch):
+    container_id = '09e2b22b36fa' + 'a' * 52
+    process = tmp_path / '86699'
+    process.mkdir()
+    fields = ['0'] * 22
+    fields[0], fields[1], fields[17], fields[19], fields[21] = 'S', '86600', '166', '1234', '100'
+    (process / 'stat').write_text('86699 (uvicorn) ' + ' '.join(fields))
+    (process / 'cgroup').write_text(f'0::/system.slice/docker-{container_id}.scope\n')
+    monkeypatch.setattr(activity.os, 'readlink', lambda path: '/usr/local/bin/python3.11')
+    rows, _ = activity.process_snapshot(tmp_path)
+    sampled = activity.process_usage(rows, rows, 1, 100, 4096)
+    assert sampled[0]['container_id'] == container_id
+    assert sampled[0]['executable'] == '/usr/local/bin/python3.11'
+    assert sampled[0]['parent_pid'] == 86600
+    (process / 'cgroup').write_text(f'12:memory:/docker/{container_id}\n')
+    legacy, _ = activity.process_snapshot(tmp_path)
+    assert legacy[86699]['container_id'] == container_id
+    result = activity.associate_containers({'items': sampled}, {'status': 'ok', 'items': [
+        {'id': container_id, 'name': 'odysseus-fateblade-odysseus-1', 'image': 'odysseus-fateblade:dwarfstar-poc'}]})
+    assert result['items'][0]['container']['name'] == 'odysseus-fateblade-odysseus-1'
+
+
+def test_container_lookup_is_independent_of_process_name_and_handles_missing_inventory():
+    container_id = 'a' * 64
+    for name in ('uvicorn', 'python', 'worker'):
+        process = {'name': name, 'container_id': container_id}
+        activity.associate_containers({'items': [process]}, {'status': 'ok', 'items': [
+            {'id': container_id, 'name': 'gateway', 'image': 'gateway:image'}]})
+        assert process['container']['name'] == 'gateway'
+    process = {'container_id': container_id}
+    activity.associate_containers({'items': [process]}, {'status': 'unavailable'})
+    assert 'container' not in process
+    activity.associate_containers({'items': [process]}, {'status': 'ok', 'items': [
+        {'id': 'a' * 12, 'name': 'one'}, {'id': 'a' * 13, 'name': 'two'}]})
+    assert 'container' not in process
+
+
+def test_inventory_returns_full_ids_without_inspecting_container_secrets(monkeypatch):
+    import json
+    from types import SimpleNamespace
+    calls = []
+    def run(command, **kwargs):
+        calls.append(command)
+        return SimpleNamespace(returncode=0, stdout=json.dumps({'ID': 'a' * 64, 'Names': 'odysseus', 'Image': 'image:tag'}))
+    monkeypatch.setattr(overview.subprocess, 'run', run)
+    result = overview.containers()
+    assert result['items'][0]['id'] == 'a' * 64
+    assert '--no-trunc' in calls[0]
+    assert 'inspect' not in calls[0]
