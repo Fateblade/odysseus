@@ -27,7 +27,7 @@
   <link rel="stylesheet" href="/static/css/documents-gallery-editor.css?v=20260929csssplit">
   <link rel="stylesheet" href="/static/css/email-calendar-notes-tasks.css?v=20260929csssplit">
   <link rel="stylesheet" href="/static/css/cookbook-research-memory-settings.css?v=20260929csssplit">
-  <link rel="stylesheet" href="/static/css/operations.css?v=20261022dwarfstarcontext1">
+  <link rel="stylesheet" href="/static/css/operations.css?v=20261022audit1">
 </head>
 <body class="operations-page">
   <a class="operations-skip" href="#operations-workspace">Skip to content</a>
@@ -42,6 +42,7 @@
         <button type="button" class="cookbook-btn" id="operations-litellm-tab" aria-pressed="false" aria-controls="operations-litellm-panel"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 6h16M4 12h16M4 18h16"/><circle cx="9" cy="6" r="2"/><circle cx="15" cy="12" r="2"/><circle cx="9" cy="18" r="2"/></svg>Models &amp; routing</button>
         <button type="button" class="cookbook-btn" id="operations-management-tab" aria-pressed="false" aria-controls="operations-management-panel"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="4" width="18" height="6" rx="2"/><rect x="3" y="14" width="18" height="6" rx="2"/><path d="M7 7h1m-1 10h1m4-10h5m-5 10h5"/></svg>Management</button>
         <button type="button" class="cookbook-btn" id="operations-jobs-tab" aria-pressed="false" aria-controls="operations-jobs-panel"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m5 6 6 6-6 6m9 0h5"/></svg>Scripts &amp; TPS tests</button>
+        <button type="button" class="cookbook-btn" id="operations-audit-tab" aria-pressed="false" aria-controls="operations-audit-panel">Request journal</button>
       </nav>
       <div class="operations-sidebar-footer">
         <p id="operations-sidebar-host">Linux AI host</p>
@@ -76,6 +77,17 @@
     </div>
     <div id="operations-management-panel" class="operations-panel" hidden></div>
     <div id="operations-jobs-panel" class="operations-panel" hidden></div>
+    <div id="operations-audit-panel" class="operations-panel" hidden>
+      <p id="operations-audit-status" class="operations-status" role="status">Loading request journal…</p>
+      <section class="operations-surface operations-audit-entries">
+        <div class="operations-section-header"><h2>Recent entries</h2><button id="operations-audit-refresh" type="button" class="cookbook-btn">Refresh journal</button></div>
+        <p class="operations-muted">Caller labels and forwarded addresses can be client-supplied. Shared API keys cannot identify individual applications reliably. Residency observations show changes, not proof of which request caused them. Requests bypassing the gateway need their own instrumentation.</p>
+        <label class="operations-field">Filter entries<input id="operations-audit-filter" class="settings-input" type="search" placeholder="Model, caller or request ID"></label>
+        <p id="operations-audit-count" class="operations-muted"></p>
+        <div id="operations-audit-entries" class="operations-table-wrap"></div>
+      </section>
+      <section class="operations-surface operations-audit-detail"><h2>Entry details</h2><p class="operations-muted">Admin-only captured request or response content. Entries rotate out; oversized content is marked truncated. Logging starts after installation and cannot recover earlier calls.</p><pre id="operations-audit-detail" class="operations-diff">Select Inspect on an entry.</pre></section>
+    </div>
     <dialog id="operations-confirm" class="operations-confirm">
       <h2>Confirm operation</h2><p id="operations-confirm-text"></p>
       <div class="cookbook-actions"><button class="cookbook-btn" id="operations-confirm-cancel" type="button">Cancel</button><button class="cookbook-btn cookbook-run-btn" id="operations-confirm-apply" type="button">Confirm</button></div>
@@ -124,6 +136,6 @@
     </div>
     </div>
   </main>
-  <script type="module" src="/static/js/operations.js?v=20261022dwarfstarcontext1"></script>
+  <script type="module" src="/static/js/operations.js?v=20261022audit1"></script>
 </body>
 </html>

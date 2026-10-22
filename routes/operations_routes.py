@@ -1,9 +1,11 @@
 """Admin-only Operations API; host targets are deployment-configured."""
 
 import json
+import uuid
 from urllib.parse import urlsplit
 
 from fastapi import APIRouter, HTTPException, Request
+from fastapi.responses import JSONResponse
 
 from core.middleware import require_admin
 from services.operations.litellm import HostOperations
@@ -35,7 +37,13 @@ def setup_operations_routes(service=None):
             except (ValueError, UnicodeDecodeError):
                 raise HTTPException(400, "Operation request must be a JSON object") from None
         try:
-            return await operations.run(action, values)
+            values["_audit"] = {"actor": getattr(request.state, "current_user", None) or "auth-disabled or internal admin",
+                                "client_ip": request.client.host if request.client else None,
+                                "user_agent": request.headers.get("user-agent", "")[:512], "request_id": uuid.uuid4().hex}
+            result = await operations.run(action, values)
+            if action in ("audit", "audit_detail"):
+                return JSONResponse(result, headers={"Cache-Control": "no-store"})
+            return result
         except OperationsError as error:
             raise HTTPException(error.status, str(error)) from None
 
@@ -54,6 +62,14 @@ def setup_operations_routes(service=None):
     @router.get("/residency")
     async def get_residency(request: Request):
         return await invoke(request, "residency")
+
+    @router.get("/audit")
+    async def get_audit(request: Request):
+        return await invoke(request, "audit")
+
+    @router.post("/audit/detail")
+    async def get_audit_detail(request: Request):
+        return await invoke(request, "audit_detail")
 
     @router.post("/manage")
     async def manage_host(request: Request):

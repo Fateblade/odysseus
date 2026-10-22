@@ -92,7 +92,8 @@ def enqueue(management, specification):
         job_id = uuid.uuid4().hex
         folder = directory / job_id
         folder.mkdir(mode=0o700)
-        record = {"id": job_id, "state": "queued", "created_at": time.time(), "specification": specification}
+        record = {"id": job_id, "state": "queued", "created_at": time.time(), "specification": specification,
+                  "audit": getattr(management, "audit_actor", {})}
         write_json(folder / "job.json", record)
         worker = Path(__file__).resolve().parents[2] / "scripts" / "odysseus-operations-worker.py"
         try:

@@ -1,4 +1,5 @@
 const sections = {
+  audit: [['entries', 'Recent entries', '.operations-audit-entries'], ['detail', 'Entry details', '.operations-audit-detail']],
   overview: [
     ['hardware', 'Hardware', '#operations-metrics'], ['storage', 'Disk space', '.operations-storage-panel'],
     ['services', 'Inference services', '.operations-service-panel'], ['requests', 'Requests', '.operations-activity-panel'],

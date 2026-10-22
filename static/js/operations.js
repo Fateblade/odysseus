@@ -1,7 +1,8 @@
 import { applyColors, applyFontDensity, getSaved } from './theme.js';
 import { closeOverview, openOverview } from './operationsOverview.js?v=20261022dwarfstar1';
 import { openManagement, closeManagement } from './operationsManagement.js?v=20261022dwarfstarcontext1';
-import { showSections, panelForSectionHash } from './operationsNavigation.js?v=20261022dwarfstar1';
+import { showSections, panelForSectionHash } from './operationsNavigation.js?v=20261022audit1';
+import { openAudit } from './operationsAudit.js?v=20261022audit1';
 
 const endpoint = '/api/operations/litellm';
 let state = null;
@@ -19,11 +20,12 @@ function selectPanel(name) {
     litellm: ['Models & routing', 'Manage the deployments and aliases exposed by LiteLLM.'],
     management: ['Management', 'Control containers, inference servers and resident models.'],
     jobs: ['Scripts & TPS tests', 'Run benchmarks, inspect output and compare results.'],
+    audit: ['Request journal', 'Trace callers, inference requests, host actions and model residency.'],
   };
   el('operations-page-title').textContent = titles[name][0];
   el('operations-page-description').textContent = titles[name][1];
   const overview = name === 'overview';
-  for (const panel of ['overview', 'litellm', 'management', 'jobs']) {
+  for (const panel of ['overview', 'litellm', 'management', 'jobs', 'audit']) {
     el(`operations-${panel}-panel`).hidden = panel !== name;
     el(`operations-${panel}-tab`).setAttribute('aria-pressed', String(panel === name));
   }
@@ -35,6 +37,7 @@ function selectPanel(name) {
     closeOverview();
     if (name === 'litellm' && !state) task(load, 'Loading LiteLLM configuration…');
     if (name === 'management' || name === 'jobs') openManagement(name);
+    if (name === 'audit') openAudit();
   }
   showSections(name);
 }
@@ -298,6 +301,7 @@ el('operations-overview-tab').addEventListener('click', () => selectPanel('overv
 el('operations-litellm-tab').addEventListener('click', () => selectPanel('litellm'));
 el('operations-management-tab').addEventListener('click', () => selectPanel('management'));
 el('operations-jobs-tab').addEventListener('click', () => selectPanel('jobs'));
+el('operations-audit-tab').addEventListener('click', () => selectPanel('audit'));
 window.addEventListener('hashchange', () => {
   const panel = panelForSectionHash();
   if (panel) selectPanel(panel);

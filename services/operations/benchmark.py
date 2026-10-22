@@ -9,6 +9,25 @@ from services.operations.litellm_host import NoRedirect
 
 
 def sample(management, specification):
+    from services.operations.audit import directory, emit
+    import uuid
+    fields = {**getattr(management, "audit_actor", {}), "request_id": uuid.uuid4().hex,
+              "job_id": getattr(management, "audit_job_id", None), "source": "benchmark",
+              "backend": specification["backend"], "model": specification["model"]}
+    emit(directory(management), "request.received", **fields,
+         content={"prompt": specification["prompt"]} if management.settings.get("audit_capture_content", True) else None)
+    try:
+        result = _sample(management, specification)
+    except Exception as error:
+        emit(directory(management), "request.failed", **fields, error_type=type(error).__name__)
+        raise
+    emit(directory(management), "request.succeeded", **fields, prompt_tokens=result["prompt_tokens"],
+         output_tokens=result["output_tokens"], duration_ms=result["elapsed_s"] * 1000,
+         content=result.pop("captured_response", None))
+    return result
+
+
+def _sample(management, specification):
     backend = specification["backend"]
     ollama = backend == "ollama"
     endpoints = {"ollama": management.ollama_url, "strata": management.strata_url, "dwarfstar": management.dwarfstar_url}
@@ -27,6 +46,7 @@ def sample(management, specification):
                       data=json.dumps(payload).encode(), headers={"Content-Type": "application/json"})
     start = time.perf_counter()
     first, usage, final, timings = None, {}, {}, {}
+    captured, captured_size = [], 0
     completed = False
     with build_opener(NoRedirect()).open(request, timeout=300) as response:
         while raw := response.readline(1024 * 1024 + 1):
@@ -53,6 +73,12 @@ def sample(management, specification):
                 emitted = any(c.get("delta", {}).get("content") or c.get("delta", {}).get("reasoning_content") for c in event.get("choices", []))
                 usage = event.get("usage") or usage
                 timings = event.get("timings") or timings
+            if management.settings.get("audit_capture_content", True):
+                fragment = {key: event.get(key) for key in ("response", "thinking", "choices") if event.get(key)}
+                encoded = json.dumps(fragment)
+                if fragment and captured_size < 2 * 1024 * 1024:
+                    captured.append(fragment)
+                    captured_size += len(encoded)
             if emitted:
                 first = first or time.perf_counter()
     if not completed:
@@ -73,6 +99,8 @@ def sample(management, specification):
         result.update(decode_tps=timings.get("predicted_per_second"), prefill_tps=timings.get("prompt_per_second"),
                       timings=timings, measurement="backend timings when supplied; client wall time otherwise")
     result["end_to_end_tps"] = tokens / elapsed if tokens else None
+    if management.settings.get("audit_capture_content", True):
+        result["captured_response"] = {"chunks": captured, "truncated": captured_size >= 2 * 1024 * 1024}
     return result
 
 

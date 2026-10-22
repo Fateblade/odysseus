@@ -448,3 +448,7 @@ If configuration changed after this experiment, reconcile those later changes ra
 - [Serving documentation](https://github.com/antirez/ds4/blob/5379c1c9ac315f1540371b06a3db88491d4059ff/docs/SERVER.md)
 
 Local verification covers discovery, malformed/unavailable/disabled endpoints, helper/worker endpoint propagation, benchmark usage handling and existing Operations regressions. The actual ROCm build, model download, GPU allocation, user-service permissions and real-model chat/tool quality require execution on the Ubuntu server. Checking out and rebuilding Odysseus installs its integration; complete the DwarfStar build, model and service steps separately on the first installation.
+
+## Optional inference request journal
+
+See [Inference request journal installation](INFERENCE_REQUEST_JOURNAL.md) to capture caller/model metadata, full prompts and responses, management jobs and independently observed residency changes. The gateway extension and observer need a one-time host setup after pulling and rebuilding Odysseus.

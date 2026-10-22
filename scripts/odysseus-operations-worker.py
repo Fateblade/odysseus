@@ -23,6 +23,9 @@ def benchmark(management, specification):
 
 
 def perform(folder, management, specification):
+    record = json.loads((folder / "job.json").read_text())
+    management.audit_actor = record.get("audit", {})
+    management.audit_job_id = record.get("id", folder.name)
     kind = specification["kind"]
     if kind == "benchmark":
         result = benchmark(management, specification)
@@ -64,6 +67,9 @@ def supervise(folder, management):
     specification = record["specification"]
     record.update(state="running", started_at=time.time(), worker_pid=os.getpid(), worker_identity=identity(os.getpid()))
     write_json(folder / "job.json", record)
+    from services.operations.audit import directory, emit, request_fields
+    emit(directory(management), "job.started", source="host-worker", job_id=record["id"],
+         **record.get("audit", {}), **request_fields(specification))
     environment = dict(os.environ, ODYSSEUS_JOB_RESULT_PATH=str(folder / "result.json"))
     if specification["kind"] == "script":
         from services.operations.jobs import script_definition
@@ -128,6 +134,9 @@ def supervise(folder, management):
                 record["result_error"] = "Result file is not valid JSON."
     write_json(folder / "job.json", record)
 
+    emit(directory(management), "job.finished", source="host-worker", job_id=record["id"], status=record["state"],
+         **record.get("audit", {}), **request_fields(record["specification"]))
+
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
@@ -150,4 +159,7 @@ if __name__ == "__main__":
         if not args.execute:
             record = json.loads((folder / "job.json").read_text())
             write_json(folder / "job.json", {**record, "state": "failed", "finished_at": time.time(), "error": "Worker failed; inspect its host log."})
+            from services.operations.audit import directory, emit, request_fields
+            emit(directory(management), "job.finished", source="host-worker", job_id=record.get("id"), status="failed",
+                 error_type=type(error).__name__, **record.get("audit", {}), **request_fields(record["specification"]))
         sys.exit(1)

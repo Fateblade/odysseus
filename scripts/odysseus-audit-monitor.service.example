@@ -1,0 +1,14 @@
+[Unit]
+Description=Odysseus inference residency journal
+After=network.target
+
+[Service]
+Type=simple
+WorkingDirectory=/mnt/odysseus-fateblade
+ExecStart=%h/.local/share/odysseus-operations/venv/bin/python /mnt/odysseus-fateblade/scripts/odysseus-audit-monitor.py --management-config %h/.config/odysseus-operations/management.json --dwarfstar-url http://127.0.0.1:8000
+Restart=on-failure
+RestartSec=5
+UMask=0077
+
+[Install]
+WantedBy=default.target

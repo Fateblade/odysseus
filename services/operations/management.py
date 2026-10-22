@@ -41,6 +41,7 @@ class Management:
         self.strata_url = strata_url
         self.ollama_url = ollama_url
         self.dwarfstar_url = dwarfstar_url
+        self.audit_actor = {}
 
     def catalog(self):
         names = ["strata", "ollama"] + (["dwarfstar"] if self.dwarfstar_url else [])
