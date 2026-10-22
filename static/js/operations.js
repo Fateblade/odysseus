@@ -1,6 +1,6 @@
 import { applyColors, applyFontDensity, getSaved } from './theme.js';
-import { closeOverview, openOverview } from './operationsOverview.js?v=20261015workspace1';
-import { openManagement, closeManagement } from './operationsManagement.js?v=20261020residency1';
+import { closeOverview, openOverview } from './operationsOverview.js?v=20261020activity1';
+import { openManagement, closeManagement } from './operationsManagement.js?v=20261020activity1';
 
 const endpoint = '/api/operations/litellm';
 let state = null;

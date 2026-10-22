@@ -4,6 +4,7 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Operations — Odysseus</title>
+  <link rel="icon" type="image/svg+xml" sizes="any" href="/static/operations-icon.svg?v=20261022brand1">
   <link rel="preload" as="font" type="font/woff2" crossorigin href="/static/fonts/FiraCode-Regular.woff2">
   <link rel="stylesheet" href="/static/css/00-tokens.css?v=20260929csssplit">
   <link rel="stylesheet" href="/static/css/01-agent-chat.css?v=20260929csssplit">
@@ -26,7 +27,7 @@
   <link rel="stylesheet" href="/static/css/documents-gallery-editor.css?v=20260929csssplit">
   <link rel="stylesheet" href="/static/css/email-calendar-notes-tasks.css?v=20260929csssplit">
   <link rel="stylesheet" href="/static/css/cookbook-research-memory-settings.css?v=20260929csssplit">
-  <link rel="stylesheet" href="/static/css/operations.css?v=20261020residency1">
+  <link rel="stylesheet" href="/static/css/operations.css?v=20261020activity1">
 </head>
 <body class="operations-page">
   <a class="operations-skip" href="#operations-workspace">Skip to content</a>
@@ -65,6 +66,8 @@
           <section class="operations-surface operations-memory-panel"><div class="operations-section-header"><h2>Shared memory</h2><span class="operations-muted">Linux and GPU allocations</span></div><div id="operations-memory"></div><p class="operations-muted operations-memory-note">RAM and GPU counters describe different views of shared physical memory. GTT is not additional memory.</p></section>
           <section class="operations-surface operations-thermal-panel"><h2>Thermals</h2><div id="operations-thermals" class="operations-table-wrap"></div></section>
           <section class="operations-surface operations-service-panel"><h2>Inference services</h2><div id="operations-services" class="operations-metric-grid"></div></section>
+          <section class="operations-surface operations-activity-panel"><h2>Inference activity</h2><div id="operations-request-activity"></div><h3>Strata requests</h3><p id="operations-request-note" class="operations-muted"></p><div id="operations-strata-requests" class="operations-table-wrap"></div><h3>Recent Strata generations</h3><div id="operations-strata-history" class="operations-table-wrap"></div></section>
+          <section class="operations-surface operations-process-panel"><div class="operations-section-header"><h2>Host processes</h2><label>Sort by <select id="operations-process-sort" class="settings-input"><option value="cpu_percent">CPU</option><option value="rss_bytes">RAM</option><option value="gpu_engine_percent">GPU engines</option><option value="gpu_vram_bytes">GPU memory</option></select></label></div><p class="operations-muted">Top CPU, RAM and GPU consumers. CPU: 100% is one logical core; GPU: summed engine busy time, which may exceed 100%. RSS and GPU allocations can include shared memory and must not be added together.</p><p id="operations-process-note" class="operations-muted"></p><div id="operations-processes" class="operations-table-wrap"></div></section>
           <section class="operations-surface operations-container-panel"><div class="operations-section-header"><h2>Docker containers</h2><button class="cookbook-btn" type="button" id="operations-open-containers">Manage containers</button></div><div id="operations-containers" class="operations-table-wrap"></div></section>
           <section class="operations-surface operations-inventory-panel"><div class="operations-section-header"><h2>Ollama models</h2><button class="cookbook-btn" type="button" id="operations-open-models">Manage models</button></div><p id="operations-loaded-models" class="operations-status"></p><div id="operations-ollama-models" class="operations-table-wrap"></div></section>
         </div>
@@ -120,6 +123,6 @@
     </div>
     </div>
   </main>
-  <script type="module" src="/static/js/operations.js?v=20261020dropparams1"></script>
+  <script type="module" src="/static/js/operations.js?v=20261020activity1"></script>
 </body>
 </html>

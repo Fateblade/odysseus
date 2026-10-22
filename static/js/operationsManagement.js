@@ -81,7 +81,9 @@ function renderResidency(data) {
   host.replaceChildren(node('p', state, 'operations-residency-state'));
   facts(host, [['Server', reachable ? strata.status === 'ok' ? 'Ready' : 'Degraded' : 'Unavailable'],
     ['Reported model', strata.model], ['Runtime context', tokens(strata.max_context)],
-    ['Engine state', strata.state], ['Queued requests', strata.queued]]);
+    ['Engine state', strata.state], ['Queued requests', strata.queued],
+    ['Generated tokens', strata.activity?.generated],
+    ['Request elapsed', Number.isFinite(strata.activity?.elapsed_s) ? `${strata.activity.elapsed_s} s` : 'Not reported']]);
   if (!reachable) host.append(node('p', strata.message || 'Unable to read live status.', 'operations-error'));
   const ollama = data.ollama || {};
   const list = el('operations-ollama-live');
@@ -224,6 +226,9 @@ function initialize() {
   management.append(content);
   controls(content, 'Docker containers', 'docker', [], ['start', 'stop', 'restart', 'logs']);
   controls(content, 'Inference servers', 'service', [], ['status', 'start', 'stop', 'restart', 'logs']);
+  const serviceNote = node('p', '', 'operations-muted');
+  serviceNote.id = 'operations-service-configuration-note';
+  el('operations-service-name').closest('section').append(serviceNote);
   const strata = section(content, 'Strata residency', 'Load the configured model into memory, or release it while keeping the server available. Active requests are not forcibly stopped.', 'operations-strata-residency');
   const strataLive = node('div', 'Reading live status…');
   strataLive.id = 'operations-strata-live';
@@ -410,11 +415,23 @@ async function refreshManagement() {
   const result = await request('management');
   el('operations-management-content').hidden = false;
   options(el('operations-docker-name'), result.containers || []);
-  options(el('operations-service-name'), Object.keys(result.services || {}));
-  for (const target of ['docker', 'service']) {
-    const select = el(`operations-${target}-name`);
-    select.closest('section').querySelectorAll('[data-host-control]').forEach(control => { control.disabled = !select.options.length; });
-  }
+  const services = result.services || {};
+  const missing = result.unconfigured_services || [];
+  const serviceSelect = el('operations-service-name');
+  options(serviceSelect, [...Object.keys(services), ...missing]);
+  for (const option of serviceSelect.options) if (missing.includes(option.value)) option.textContent = `${option.value} (not configured)`;
+  const updateService = () => {
+    const configured = Object.hasOwn(services, serviceSelect.value);
+    serviceSelect.closest('section').querySelectorAll('[data-host-control]').forEach(control => { control.disabled = !configured; });
+    const setting = services[serviceSelect.value];
+    el('operations-service-configuration-note').textContent = configured ?
+      `Configured unit: ${typeof setting === 'string' ? setting : setting.unit} (${typeof setting === 'string' ? 'user' : setting.scope || 'user'} scope).` :
+      `${serviceSelect.value || 'Service'} controls are not configured in the host management JSON. For native Ollama, verify ollama.service and configure its system scope and service permissions. Model inventory and residency work independently.`;
+  };
+  serviceSelect.onchange = updateService;
+  updateService();
+  const dockerSelect = el('operations-docker-name');
+  dockerSelect.closest('section').querySelectorAll('[data-host-control]').forEach(control => { control.disabled = !dockerSelect.options.length; });
   status(result.demo ? 'Preview data — controls are simulated.' : 'Host controls ready.');
   const draft = strataState && (el('operations-strata-quantization').value !== strataState.model || Number(el('operations-strata-context').value) !== strataState.configured_context);
   if (!strataState || (!draft && !strataReview)) await loadStrata();

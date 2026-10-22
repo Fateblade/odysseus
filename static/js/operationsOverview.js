@@ -2,6 +2,7 @@ const el = id => document.getElementById(id);
 let timer = null;
 let active = false;
 let loading = false;
+let processState = null;
 const gib = value => Number.isFinite(value) ? `${(value / 1024 ** 3).toFixed(1)} GiB` : 'Unavailable';
 const percent = value => Number.isFinite(value) ? `${value.toFixed(1)}%` : 'Unavailable';
 const text = value => value ?? 'Unavailable';
@@ -102,7 +103,57 @@ function action(label, target) {
   return result;
 }
 
+const seconds = value => Number.isFinite(value) ? `${value.toFixed(1)} s` : 'Unavailable';
+const timestamp = value => Number.isFinite(value) ? new Date(value * 1000).toLocaleTimeString() : 'Unavailable';
+
+function renderProcesses(processes) {
+  processState = processes;
+  const sort = el('operations-process-sort').value;
+  const rows = [...(processes.items || [])].sort((a, b) => (b[sort] ?? -1) - (a[sort] ?? -1)).slice(0, 30);
+  const states = { R: 'Running', S: 'Sleeping', D: 'I/O wait', T: 'Stopped', t: 'Tracing stop', I: 'Idle' };
+  table('operations-processes', ['PID', 'Process', 'Service / scope', 'State', 'CPU', 'RAM (RSS)', 'GPU engines', 'GPU memory', 'Threads'], rows.map(row => [
+    row.pid, row.name, row.unit || '—', states[row.state] || row.state, percent(row.cpu_percent), gib(row.rss_bytes),
+    Number.isFinite(row.gpu_engine_percent) ? percent(row.gpu_engine_percent) : 'Not reported',
+    Number.isFinite(row.gpu_vram_bytes) ? gib(row.gpu_vram_bytes) : 'Not reported', row.threads,
+  ]), processes.message || 'No process readings available.');
+  el('operations-process-note').textContent = processes.status !== 'ok' ? processes.message || 'Process sampling unavailable.' :
+    `${processes.visible_processes} readable processes; ${rows.length} shown. Sample: ${seconds(processes.sample_seconds)}. ${processes.skipped || 0} exited or unreadable. ` +
+    (processes.gpu_available ? 'GPU counters are reported only where the driver and process permissions allow access.' : 'Per-process GPU counters unavailable; check aggregate GPU utilization above.');
+}
+
+function renderActivity(data) {
+  const strata = data.strata || {};
+  const live = strata.activity || {};
+  const gateway = data.gateway_activity || {};
+  const content = el('operations-request-activity');
+  content.replaceChildren();
+  const current = node('article');
+  current.append(node('h3', 'Strata'), facts([
+    ['State', live.state || strata.state], ['Running', live.running], ['Queued', live.queued],
+    ['Elapsed', seconds(live.elapsed_s)], ['Prompt tokens', live.prompt_tokens],
+    ['Prompt read / total', live.prompt_total != null ? `${text(live.prompt_read)} / ${live.prompt_total}` : 'Unavailable'],
+    ['Generated tokens', live.generated], ['Generation', percentless(live.tok_s)],
+  ]));
+  if (!strata.metrics_available) current.append(node('p', 'Live request metrics unavailable from Strata.', 'operations-muted'));
+  const proxy = node('article');
+  proxy.append(node('h3', 'LiteLLM'), node('p', gateway.status === 'ok' ? `${gateway.in_flight_requests} HTTP requests in flight` : gateway.message || 'In-flight count unavailable.', 'operations-muted'),
+    node('p', 'The gateway count is a worker snapshot of HTTP activity, not an Ollama-only request count. Direct backend calls are outside this count.', 'operations-muted'));
+  const ollama = node('article');
+  ollama.append(node('h3', 'Ollama'), node('p', 'Its API does not expose an active-request list. Loaded models may be idle. Use the Ollama / runner processes below to identify resource activity.', 'operations-muted'));
+  content.append(current, proxy, ollama);
+  table('operations-strata-requests', ['Started', 'ID', 'Model', 'Endpoint', 'State', 'Elapsed', 'Queue', 'Load', 'First token'], (strata.requests || []).map(row => [
+    timestamp(row.started_at), row.id, row.model, row.path, row.state,
+    seconds(row.wallclock_s), seconds(row.queue_s), seconds(row.load_s), seconds(row.first_token_s),
+  ]), strata.requests_available ? 'No retained Strata requests.' : 'Request list unavailable. This Strata version may not expose it, or its API monitor is disabled.');
+  el('operations-request-note').textContent = 'Up to 30 live or retained requests reported by Strata. Completed entries are history. Prompts and response contents are omitted.';
+  table('operations-strata-history', ['Started', 'Finish', 'Duration', 'Prompt tokens', 'Output tokens', 'Decode'], (strata.recent_requests || []).map(row => [
+    timestamp(row.time), row.finish, seconds(row.duration_s), row.prompt_tokens, row.output_tokens, percentless(row.decode_tok_s),
+  ]), strata.metrics_available ? 'No completed generations reported.' : 'Generation history unavailable.');
+}
+
 function render(data) {
+  renderProcesses(data.processes || {});
+  renderActivity(data);
   const host = data.host || {};
   const memory = host.memory || {};
   const cpu = host.cpu || {};
@@ -187,7 +238,7 @@ async function refresh() {
     }
     render(data);
     el('operations-overview-content').hidden = false;
-    const unavailable = ['host', 'containers', 'strata', 'ollama', 'litellm'].filter(key => data[key]?.status !== 'ok');
+    const unavailable = ['host', 'containers', 'strata', 'ollama', 'litellm', 'processes'].filter(key => data[key]?.status !== 'ok');
     const time = new Date(data.sampled_at * 1000).toLocaleTimeString();
     status.textContent = `${data.demo ? 'Preview data · ' : ''}Updated ${time}${unavailable.length ? ` · unavailable or incomplete: ${unavailable.join(', ')}` : ''}`;
     status.classList.toggle('operations-error', unavailable.length > 0);
@@ -202,7 +253,7 @@ async function refresh() {
   } finally {
     loading = false;
     el('operations-refresh-overview').disabled = false;
-    if (active && !document.hidden) timer = setTimeout(refresh, 10000);
+    if (active && !document.hidden) timer = setTimeout(refresh, 5000);
   }
 }
 
@@ -219,4 +270,5 @@ export function closeOverview() {
 el('operations-refresh-overview').addEventListener('click', refresh);
 el('operations-open-containers').addEventListener('click', () => el('operations-management-tab').click());
 el('operations-open-models').addEventListener('click', () => el('operations-management-tab').click());
+el('operations-process-sort').addEventListener('change', () => processState && renderProcesses(processState));
 document.addEventListener('visibilitychange', () => document.hidden ? clearTimeout(timer) : active && refresh());

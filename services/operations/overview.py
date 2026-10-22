@@ -132,8 +132,25 @@ def strata(base_url):
         result.update({"version": engine.get("version"), "state": live.get("state"),
                        "queued": live.get("queued"), "generation_tps": live.get("tok_s_mean"),
                        "prefill_tps": live.get("prefill_tok_s_mean")})
+        live_keys = ("state", "phase", "queued", "running", "waiting", "admitting", "prompt_tokens",
+                     "prompt_read", "prompt_total", "generated", "max_tokens", "elapsed_s", "tok_s", "tok_s_mean")
+        result["activity"] = {key: live.get(key) for key in live_keys}
+        result["recent_requests"] = [{key: row.get(key) for key in
+            ("time", "duration_s", "finish", "prompt_tokens", "output_tokens", "decode_tok_s")}
+            for row in metrics.get("requests", [])[:12] if isinstance(row, dict)]
+        result["metrics_available"] = True
     except Exception:
         result["metrics_available"] = False
+    try:
+        records = get_json(base_url.rstrip("/") + "/api/requests")
+        if not isinstance(records, dict) or not isinstance(records.get("requests"), list):
+            raise ValueError()
+        result["requests"] = [{key: row.get(key) for key in
+            ("id", "path", "model", "started_at", "state", "queue_s", "load_s", "first_token_s", "wallclock_s")}
+            for row in records.get("requests", [])[:30] if isinstance(row, dict)]
+        result["requests_available"] = True
+    except Exception:
+        result["requests_available"] = False
     return result
 
 
@@ -161,13 +178,15 @@ def litellm(base_url):
         return {"status": "unavailable", "message": "LiteLLM is not responding to its liveness probe."}
 
 
-def collect(base_url, strata_url, ollama_url, physical_memory_gib=0):
+def collect(base_url, strata_url, ollama_url, physical_memory_gib=0, config_path="", container="litellm"):
+    from services.operations.activity import processes, gateway_activity
     from src.host_docker_access import running_in_container
     if platform.system() != "Linux" or running_in_container():
         return {"configured": False, "message": "Connect the helper on the Linux host. Container and Windows readings are not substituted for host telemetry."}
     jobs = {"host": lambda: host_metrics(physical_memory_gib), "containers": containers,
             "strata": lambda: strata(strata_url), "ollama": lambda: ollama(ollama_url),
-            "litellm": lambda: litellm(base_url)}
+            "litellm": lambda: litellm(base_url), "processes": processes,
+            "gateway_activity": lambda: gateway_activity(base_url, config_path, container)}
     result = {"configured": True, "sampled_at": time.time()}
     with ThreadPoolExecutor(max_workers=len(jobs)) as executor:
         futures = {name: executor.submit(job) for name, job in jobs.items()}

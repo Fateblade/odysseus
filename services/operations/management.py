@@ -45,6 +45,7 @@ class Management:
         return {"containers": self.settings.get("containers", []),
                 "protected_containers": self.settings.get("protected_containers", ["odysseus-odysseus-1"]),
                 "services": self.settings.get("services", {}),
+                "unconfigured_services": [name for name in ("strata", "ollama") if name not in self.settings.get("services", {})],
                 "scripts_enabled": bool(self.settings.get("scripts_root")),
                 "configured": True}
 

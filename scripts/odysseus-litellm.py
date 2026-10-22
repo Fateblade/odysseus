@@ -31,7 +31,7 @@ def main():
             raise OperationsError("The operation request must be a JSON object.")
         if payload.get("action") == "overview":
             from services.operations.overview import collect
-            result = collect(args.base_url, args.strata_url, args.ollama_url, args.physical_memory_gib)
+            result = collect(args.base_url, args.strata_url, args.ollama_url, args.physical_memory_gib, args.config, args.container)
         elif payload.get("action") in ("management", "residency", "manage", "jobs", "job_detail", "job_start", "job_cancel", "script_save", "strata_config", "strata_preview", "strata_apply"):
             from services.operations.management import Management
             management = Management(args.management_config, args.strata_url, args.ollama_url)

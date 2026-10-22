@@ -58,7 +58,7 @@ def test_residency_reports_unloaded_strata_without_loading_models(monkeypatch):
     assert result["strata"]["loaded"] is False
     assert result["strata"]["max_context"] == 131072
     assert result["sampled_at"] > 0
-    assert set(requested) == {"http://strata/health", "http://strata/metrics", "http://ollama/api/tags", "http://ollama/api/ps"}
+    assert set(requested) == {"http://strata/health", "http://strata/metrics", "http://strata/api/requests", "http://ollama/api/tags", "http://ollama/api/ps"}
 
 
 def test_unreachable_strata_does_not_claim_unloaded(monkeypatch):

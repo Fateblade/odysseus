@@ -45,6 +45,9 @@ body.operations-page { --operations-muted: color-mix(in srgb, var(--fg) 68%, var
 .operations-memory-panel { grid-column: span 8; }
 .operations-thermal-panel { grid-column: span 4; }
 .operations-service-panel { grid-column: 1 / -1; }
+.operations-activity-panel, .operations-process-panel { grid-column: 1 / -1; }
+#operations-request-activity { display: grid; grid-template-columns: 2fr 1fr 1fr; gap: 20px; }
+#operations-request-activity > article { min-width: 0; }
 .operations-container-panel, .operations-inventory-panel { grid-column: span 6; }
 #operations-host-name { margin: 0 0 20px; }
 #operations-metrics { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 0; margin-bottom: 24px; border: 1px solid var(--border); border-radius: 6px; overflow: hidden; }
@@ -147,6 +150,7 @@ body.operations-page { --operations-muted: color-mix(in srgb, var(--fg) 68%, var
   .operations-benchmark, .operations-scripts { grid-column: span 6; }
 }
 @media (max-width: 900px) {
+  #operations-request-activity { grid-template-columns: 1fr; }
   .operations-memory-panel, .operations-thermal-panel, .operations-strata-residency, .operations-ollama-residency, .operations-strata-configuration, .operations-benchmark, .operations-scripts { grid-column: 1 / -1; }
   .operations-metric-grid { grid-template-columns: 1fr; }
   #operations-services .operations-metric { padding: 16px 0; border-left: 0; border-top: 1px solid var(--border); }
