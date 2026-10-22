@@ -104,6 +104,8 @@ body.operations-page { --operations-muted: color-mix(in srgb, var(--fg) 68%, var
 .operations-strata-residency { grid-column: 1 / span 6; grid-row: 2; }
 .operations-ollama-residency { grid-column: 7 / -1; grid-row: 2; }
 .operations-dwarfstar-residency { grid-column: 1 / -1; grid-row: 3; }
+.operations-dwarfstar-residency .operations-field { max-width: 320px; margin-top: 16px; }
+#operations-dwarfstar-config-fields > button { margin: 0 8px 12px 0; }
 .operations-ollama-control { grid-column: 1 / span 4; grid-row: 4; }
 .operations-strata-configuration { grid-column: 5 / -1; grid-row: 4; }
 .operations-residency-state { font-weight: 600; }

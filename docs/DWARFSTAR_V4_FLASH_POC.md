@@ -310,6 +310,32 @@ Keep the same existing Compose overrides, project name, bind addresses and volum
 
 Sign in as admin. **Overview** should show DwarfStar readiness, reported model and context. **Management → DwarfStar residency** should show one model and the accepted request aliases. Start/stop controls use the configured user service. A stopped or starting server has unknown residency until readiness is confirmed; no fabricated zero-memory counter is displayed.
 
+### Change maximum context from Management
+
+The same DwarfStar card now has **Maximum context (tokens)**, **Review context change** and **Apply context** controls. With the user unit installed above, no service migration or new management settings are needed.
+
+1. Finish the active TPS job and other DwarfStar requests. Context applies use the shared host job queue and cannot run alongside another dashboard job.
+2. Enter a whole-token value, for example `65536` for 64K. Review the change and confirm **Apply context**. A running server is stopped and restarted; active requests are interrupted. A stopped server's configuration is saved without starting it.
+3. Inspect the `dwarfstar_context` job in **Scripts & TPS tests**. The helper backs up the exact user-unit file, changes only its `--ctx` number and runs the user manager's daemon reload. For a previously running server, it verifies the same reported model and requested context through `/v1/models` before reporting success.
+4. Return to Management and check **Configured** versus **Active** context. **Reload context configuration** refreshes the saved settings and discards an unsubmitted context edit. Unedited settings also refresh while Management is visible.
+5. Test with a genuinely long prompt and observe memory use. The default selectable maximum is `262144`; this is an operator limit, not a hardware-fit guarantee. Step up from 64K to 128K and then 256K only after checking each run.
+
+On startup failure or job cancellation, the helper attempts to restore the exact prior unit and previous running/stopped state. The job records whether recovery was verified and where the private `dwarfstar-backup` is stored. If the unit was edited externally during the operation, recovery does not overwrite that newer edit; inspect the saved backup and logs. An abrupt worker kill or host crash can also require manual recovery from that backup.
+
+Context management supports a direct `ds4-server` ExecStart in an allowlisted **user** service. Units using launcher scripts, continued ExecStart lines, multiple context flags, drop-ins, symlinks or pending daemon reloads are rejected. The service from this guide is supported. System services requiring sudo are outside this workflow.
+
+For an intentionally different user-unit location or operator ceiling, the host management JSON accepts this optional profile (merge it alongside existing fields):
+
+```json
+"dwarfstar_setup": {
+  "service": "dwarfstar",
+  "unit_file": "/home/seth/.config/systemd/user/dwarfstar.service",
+  "maximum_context": 262144
+}
+```
+
+The unit filename must match the configured service, and the selected file must match the systemd `FragmentPath`. The maximum can be set from 1024 through 1048576; increasing it does not validate memory capacity. The browser cannot supply unit paths or executable arguments.
+
 ## 10. Add a separate LiteLLM deployment
 
 Verify the existing `litellm` container still uses host networking:
@@ -389,7 +415,7 @@ In **Scripts & TPS tests** choose backend `dwarfstar`, model `deepseek-v4-flash`
 
 The benchmark talks directly to DwarfStar through the host helper. It deliberately disables thinking for this proof of concept. Results include server-reported token usage, client TTFT, elapsed time and end-to-end TPS. The inspected server does not supply native prefill/decode timings; those values remain unavailable rather than counting SSE chunks as tokens or inventing native rates. Warmup does not flush caches.
 
-Export the result JSON and retain the engine revision, verified model metadata, context and concurrent-load conditions. After a stable 4K run, consider 8K separately and remeasure memory. Do not copy Strata's 131072-token setting into this service.
+Export the result JSON and retain the engine revision, verified model metadata, context and concurrent-load conditions. After a stable 4K run, increase the setting through **Management → DwarfStar residency**, then test the new context and remeasure memory. Do not copy Strata's 131072-token setting without testing it on DwarfStar.
 
 ## 12. Switch back and recover
 

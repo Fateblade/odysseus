@@ -33,10 +33,14 @@ def main():
         if payload.get("action") == "overview":
             from services.operations.overview import collect
             result = collect(args.base_url, args.strata_url, args.ollama_url, args.physical_memory_gib, args.config, args.container, args.dwarfstar_url)
-        elif payload.get("action") in ("management", "residency", "manage", "jobs", "job_detail", "job_start", "job_cancel", "script_save", "strata_config", "strata_preview", "strata_apply"):
+        elif payload.get("action") in ("management", "residency", "manage", "jobs", "job_detail", "job_start", "job_cancel", "script_save", "strata_config", "strata_preview", "strata_apply", "dwarfstar_config", "dwarfstar_preview", "dwarfstar_apply"):
             from services.operations.management import Management
             management = Management(args.management_config, args.strata_url, args.ollama_url, args.dwarfstar_url)
-            if payload["action"].startswith("strata_"):
+            if payload["action"].startswith("dwarfstar_"):
+                from services.operations.dwarfstar_config import snapshot, review, enqueue_apply
+                operation = {"dwarfstar_config": snapshot, "dwarfstar_preview": review, "dwarfstar_apply": enqueue_apply}[payload["action"]]
+                result = operation(management) if payload["action"] == "dwarfstar_config" else operation(management, payload)
+            elif payload["action"].startswith("strata_"):
                 from services.operations.strata_config import snapshot, review, enqueue_apply
                 operation = {"strata_config": snapshot, "strata_preview": review, "strata_apply": enqueue_apply}[payload["action"]]
                 result = operation(management) if payload["action"] == "strata_config" else operation(management, payload)

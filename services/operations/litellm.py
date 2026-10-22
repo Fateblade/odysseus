@@ -31,7 +31,7 @@ class HostOperations:
         if action not in ("snapshot", "preview", "probe", "apply", "overview") and not self.remote and not self.helper:
             from src.host_docker_access import running_in_container
             if sys.platform != "linux" or running_in_container():
-                if action in ("management", "residency", "jobs", "strata_config"):
+                if action in ("management", "residency", "jobs", "strata_config", "dwarfstar_config"):
                     return {"configured": False, "message": "Connect the Linux host helper to enable management and jobs."}
                 raise OperationsError("Linux host access is not configured.", 503)
         if not self.config_path and action in ("snapshot", "preview", "probe", "apply"):

@@ -91,6 +91,18 @@ def setup_operations_routes(service=None):
     async def apply_strata_config(request: Request):
         return await invoke(request, "strata_apply")
 
+    @router.get("/dwarfstar/config")
+    async def get_dwarfstar_config(request: Request):
+        return await invoke(request, "dwarfstar_config")
+
+    @router.post("/dwarfstar/preview")
+    async def preview_dwarfstar_config(request: Request):
+        return await invoke(request, "dwarfstar_preview")
+
+    @router.post("/dwarfstar/apply")
+    async def apply_dwarfstar_config(request: Request):
+        return await invoke(request, "dwarfstar_apply")
+
     @router.post("/litellm/preview")
     async def preview_configuration(request: Request):
         return await invoke(request, "preview")

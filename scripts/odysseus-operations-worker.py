@@ -26,6 +26,9 @@ def perform(folder, management, specification):
     kind = specification["kind"]
     if kind == "benchmark":
         result = benchmark(management, specification)
+    elif kind == "dwarfstar_context":
+        from services.operations.dwarfstar_config import run
+        result = run(management, specification, folder)
     elif kind == "strata_setup":
         from services.operations.strata_config import run
         result = run(management, specification, folder)
@@ -98,7 +101,8 @@ def supervise(folder, management):
                 state = "cancelled" if (folder / "cancel").exists() else "timed_out"
                 os.killpg(child.pid, signal.SIGTERM)
                 try:
-                    child.wait(timeout=540 if specification.get("kind") == "strata_setup" else 5)
+                    recovery_timeout = {"strata_setup": 540, "dwarfstar_context": 900}.get(specification.get("kind"), 5)
+                    child.wait(timeout=recovery_timeout)
                 except subprocess.TimeoutExpired:
                     os.killpg(child.pid, signal.SIGKILL)
                 break

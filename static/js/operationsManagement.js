@@ -9,6 +9,8 @@ let pendingPanel = null;
 let strataState = null;
 let strataReview = null;
 let dwarfstarAliases = [];
+let dwarfstarState = null;
+let dwarfstarReview = null;
 let residencyVersion = 0;
 
 function node(tag, text = '', className = '') {
@@ -264,6 +266,43 @@ function initialize() {
     dwarfstarActions.append(control);
   }
   dwarfstar.append(dwarfstarLive, dwarfstarSampled, dwarfstarActions, node('p', 'Start and stop controls require a dwarfstar entry in the host service configuration. Startup can take time; refresh readiness and inspect the service logs.', 'operations-muted'));
+  const dwarfstarStatus = node('p', 'Reading context configuration…', 'operations-status');
+  dwarfstarStatus.id = 'operations-dwarfstar-config-status';
+  const dwarfstarFields = node('div');
+  dwarfstarFields.id = 'operations-dwarfstar-config-fields';
+  dwarfstarFields.hidden = true;
+  const dwarfstarContext = field(dwarfstarFields, 'operations-dwarfstar-context', 'Maximum context (tokens)', 4096, null, 'number');
+  dwarfstarContext.min = 1024; dwarfstarContext.step = 1;
+  const dwarfstarChange = node('pre', '', 'operations-diff');
+  dwarfstarChange.id = 'operations-dwarfstar-change';
+  dwarfstarChange.hidden = true;
+  const dwarfstarApply = button('Apply context', () => task(async () => {
+    if (!dwarfstarReview) throw new Error('Review the context change first.');
+    if (!await confirmOperation(`Set DwarfStar context to ${dwarfstarReview.context.toLocaleString()} tokens? A running server will restart and interrupt requests. A stopped server stays stopped. More context uses more memory. Startup failure triggers an attempt to restore the previous context.`)) return;
+    const result = await request('dwarfstar/apply', { revision: dwarfstarReview.revision, context: dwarfstarReview.context, review_digest: dwarfstarReview.review_digest });
+    dwarfstarReview = null; dwarfstarState = null; dwarfstarApply.disabled = true;
+    dwarfstarChange.hidden = true;
+    selectedJob = result.job.id;
+    await refreshJobs();
+    await loadDwarfstar();
+    status('Context job queued. Inspect its progress and result in Scripts & TPS tests.');
+  }));
+  dwarfstarApply.id = 'operations-dwarfstar-apply';
+  dwarfstarApply.disabled = true;
+  dwarfstarFields.append(button('Review context change', () => task(async () => {
+    dwarfstarReview = null; dwarfstarApply.disabled = true;
+    const context = Number(dwarfstarContext.value);
+    if (!Number.isInteger(context) || context < 1024 || context > dwarfstarState.maximum_context) throw new Error(`Enter a whole number between 1024 and ${dwarfstarState.maximum_context} tokens.`);
+    const revision = dwarfstarState.revision;
+    const reviewed = await request('dwarfstar/preview', { revision, context });
+    if (Number(dwarfstarContext.value) !== context || dwarfstarState?.revision !== revision) throw new Error('Context changed during review. Review the current value again.');
+    dwarfstarReview = reviewed;
+    dwarfstarChange.textContent = `${dwarfstarReview.display_change}\nRunning service: restart and verify. Stopped service: save without starting.`;
+    dwarfstarChange.hidden = false;
+    dwarfstarApply.disabled = false;
+  })), dwarfstarApply, dwarfstarChange);
+  dwarfstarContext.addEventListener('input', () => { dwarfstarReview = null; dwarfstarApply.disabled = true; dwarfstarChange.hidden = true; });
+  dwarfstar.append(dwarfstarStatus, button('Reload context configuration', () => task(loadDwarfstar)), dwarfstarFields);
   const configuration = section(content, 'Strata configuration', 'Choose quantization and context. Applying prepares the model, restarts Strata and verifies the result. New quantizations may need a download.', 'operations-strata-configuration');
   const contextStatus = node('p', 'Loading Strata configuration…', 'operations-status');
   contextStatus.id = 'operations-strata-config-status';
@@ -467,7 +506,28 @@ async function refreshManagement() {
   status(result.demo ? 'Preview data — controls are simulated.' : 'Host controls ready.');
   const draft = strataState && (el('operations-strata-quantization').value !== strataState.model || Number(el('operations-strata-context').value) !== strataState.configured_context);
   if (!strataState || (!draft && !strataReview)) await loadStrata();
+  const dwarfstarDraft = dwarfstarState && Number(el('operations-dwarfstar-context').value) !== dwarfstarState.configured_context;
+  if (!dwarfstarState || (!dwarfstarDraft && !dwarfstarReview)) await loadDwarfstar();
   await refreshResidency();
+}
+
+async function loadDwarfstar() {
+  dwarfstarReview = null;
+  el('operations-dwarfstar-apply').disabled = true;
+  el('operations-dwarfstar-change').hidden = true;
+  try {
+    const result = await request('dwarfstar/config');
+    if (!result.configured) throw new Error(result.message || 'DwarfStar context management is not configured.');
+    dwarfstarState = result;
+    el('operations-dwarfstar-context').value = result.configured_context;
+    el('operations-dwarfstar-context').max = result.maximum_context;
+    el('operations-dwarfstar-config-fields').hidden = false;
+    el('operations-dwarfstar-config-status').textContent = `Configured: ${tokens(result.configured_context)} · Active: ${tokens(result.active_context)}\n${result.unit} · ${result.running ? 'Running; applying restarts it' : 'Stopped; applying keeps it stopped'}. Larger contexts need a long-prompt memory test.`;
+  } catch (error) {
+    dwarfstarState = null;
+    el('operations-dwarfstar-config-fields').hidden = true;
+    el('operations-dwarfstar-config-status').textContent = error.message;
+  }
 }
 
 async function loadStrata() {
@@ -551,7 +611,13 @@ async function refreshJobs() {
 async function poll() {
   if (!active || document.hidden || polling || busy) return;
   polling = true;
-  try { await (active === 'management' ? refreshResidency() : refreshJobs()); }
+  try {
+    await (active === 'management' ? refreshResidency() : refreshJobs());
+    if (active === 'management') {
+      const draft = dwarfstarState && Number(el('operations-dwarfstar-context').value) !== dwarfstarState.configured_context;
+      if (!draft && !dwarfstarReview) await loadDwarfstar();
+    }
+  }
   catch (error) { status(error.message, true); }
   finally { polling = false; }
 }
