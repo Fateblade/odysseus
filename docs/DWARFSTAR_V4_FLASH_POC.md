@@ -112,6 +112,38 @@ test -x ./ds4-server
 
 If `~/dwarfstar` already exists, inspect its origin, revision and local changes first; do not overwrite it. `-j2` bounds concurrent compiler memory use. Do not rebuild Strata or change its Python environment for this step.
 
+### Recovery: Ubuntu 7.1.0 rocWMMA package omits internal headers
+
+Observed on the server: `librocwmma-dev 7.1.0-0ubuntu1`, `libamdhip64-dev 7.1.0-0ubuntu2`, `hipcc 7.1.1+dfsg-0ubuntu1`, HIP 7.1 and Ubuntu clang 21.1.8. The build fails at `/usr/include/rocwmma/rocwmma.hpp` with missing `internal/accessors.hpp`. The package inventory omits that file. A subsequent missing `ds4-server` means compilation did not complete.
+
+For this specific package version, use the complete upstream ROCm 7.1.0 header tree in a separate checkout. The [upstream tag](https://github.com/ROCm/rocWMMA/tree/rocm-7.1.0) resolves to `27a847f610bfdb4e58dd257889734168b0ef8626`; its public header includes the matching internal headers. No system package installation or system header changes are needed for this workaround:
+
+```bash
+git clone --depth 1 --branch rocm-7.1.0 \
+  https://github.com/ROCm/rocWMMA.git "$HOME/rocwmma-7.1.0"
+git -C "$HOME/rocwmma-7.1.0" rev-parse HEAD
+test "$(git -C "$HOME/rocwmma-7.1.0" rev-parse HEAD)" = 27a847f610bfdb4e58dd257889734168b0ef8626
+test -f "$HOME/rocwmma-7.1.0/library/include/rocwmma/internal/accessors.hpp"
+```
+
+Run clone only if that destination does not already exist; inspect an existing checkout instead. Both checks must succeed. First test header inclusion without building or running a GPU program:
+
+```bash
+printf '#include <rocwmma/rocwmma.hpp>\n' | \
+  hipcc --offload-arch=gfx1151 -std=c++17 \
+    -I"$HOME/rocwmma-7.1.0/library/include" -x hip -fsyntax-only -
+```
+
+If this succeeds, rebuild DwarfStar using an explicit include path ahead of the incomplete system headers. The pinned DwarfStar Makefile supports a command-line `HIPCC` override and passes it to the recursive ROCm build:
+
+```bash
+cd "$HOME/dwarfstar"
+make -j2 strix-halo HIPCC="hipcc -I$HOME/rocwmma-7.1.0/library/include" && \
+  ./ds4-server --help
+```
+
+Use that same build command for later rebuilds while this Ubuntu packaging issue remains. No separate rocWMMA library build is required: it is a header library. Keep the checkout for rebuilding; the running server does not need it. This addresses the observed missing-header failure; actual compilation with the server's HIP toolchain still needs validation there. If the include test or rebuild fails, retain its first compiler error for diagnosis rather than copying individual headers into `/usr/include`.
+
 ## 6. Download only Flash 0731 Q2
 
 ```bash
