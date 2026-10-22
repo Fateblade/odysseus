@@ -14,7 +14,14 @@ body.operations-page { --operations-muted: color-mix(in srgb, var(--fg) 68%, var
 .operations-skip:focus { transform: none; }
 .operations-brand svg { width: 32px; height: 32px; }
 .operations-brand span { display: block; color: var(--operations-muted); font-size: 11px; font-weight: 400; }
-.operations-tabs { display: grid; gap: 8px; }
+.operations-tabs { display: grid; gap: 8px; overflow-y: auto; min-height: 0; }
+.operations-subsections { display: grid; gap: 2px; padding: 0 4px 8px 24px; }
+.operations-subsections a { display: flex; align-items: center; gap: 8px; min-height: 30px; padding: 4px 8px; color: var(--operations-muted); font-size: 11px; line-height: 1.4; text-decoration: none; border-radius: 4px; }
+.operations-subsections a::before { content: ''; width: 5px; height: 5px; border: 1px solid currentColor; border-radius: 50%; flex: 0 0 auto; }
+.operations-subsections a[aria-current] { color: var(--red); background: color-mix(in srgb, var(--red) 8%, transparent); }
+.operations-subsections a[aria-current]::before { background: currentColor; }
+.operations-subsections a[aria-disabled="true"] { opacity: 0.5; cursor: default; }
+.operations-subsections a:hover { color: var(--fg); }
 .operations-page .operations-tabs .cookbook-btn { display: flex; justify-content: flex-start; align-items: center; gap: 12px; width: 100%; min-height: 44px; padding: 12px; border: 1px solid transparent; border-radius: 6px; color: var(--operations-muted); background: transparent; font-size: 12px; text-align: left; white-space: normal; }
 .operations-tabs svg { fill: none; stroke: currentColor; stroke-width: 1.5; }
 .operations-page .operations-tabs [aria-pressed="true"] { color: var(--red); border-color: color-mix(in srgb, var(--red) 32%, transparent); background: color-mix(in srgb, var(--red) 8%, transparent); }
@@ -46,6 +53,7 @@ body.operations-page { --operations-muted: color-mix(in srgb, var(--fg) 68%, var
 .operations-thermal-panel { grid-column: span 4; }
 .operations-service-panel { grid-column: 1 / -1; }
 .operations-activity-panel, .operations-process-panel { grid-column: 1 / -1; }
+.operations-storage-panel { grid-column: 1 / -1; }
 #operations-request-activity { display: grid; grid-template-columns: 2fr 1fr 1fr; gap: 20px; }
 #operations-request-activity > article { min-width: 0; }
 .operations-container-panel, .operations-inventory-panel { grid-column: span 6; }
@@ -166,6 +174,8 @@ body.operations-page { --operations-muted: color-mix(in srgb, var(--fg) 68%, var
   .operations-brand span { display: inline; margin-left: 12px; }
   .operations-sidebar-footer { display: none; }
   .operations-tabs { display: flex; overflow-x: auto; gap: 4px; }
+  .operations-subsections { display: flex; overflow-x: auto; gap: 4px; padding: 8px 0 0; }
+  .operations-subsections a { flex: 0 0 auto; white-space: nowrap; }
   .operations-page .operations-tabs .cookbook-btn { flex: 0 0 auto; width: auto; min-height: 40px; padding: 8px; gap: 6px; font-size: 11px; white-space: nowrap; }
   .operations-tabs svg { display: none; }
   .operations-header { padding: 16px; gap: 12px; flex-wrap: wrap; }

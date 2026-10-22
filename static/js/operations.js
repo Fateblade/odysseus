@@ -1,6 +1,7 @@
 import { applyColors, applyFontDensity, getSaved } from './theme.js';
-import { closeOverview, openOverview } from './operationsOverview.js?v=20261020activity1';
+import { closeOverview, openOverview } from './operationsOverview.js?v=20261022sections1';
 import { openManagement, closeManagement } from './operationsManagement.js?v=20261020activity1';
+import { showSections, panelForSectionHash } from './operationsNavigation.js?v=20261022sections1';
 
 const endpoint = '/api/operations/litellm';
 let state = null;
@@ -35,6 +36,7 @@ function selectPanel(name) {
     if (name === 'litellm' && !state) task(load, 'Loading LiteLLM configuration…');
     if (name === 'management' || name === 'jobs') openManagement(name);
   }
+  showSections(name);
 }
 
 const el = id => document.getElementById(id);
@@ -296,4 +298,8 @@ el('operations-overview-tab').addEventListener('click', () => selectPanel('overv
 el('operations-litellm-tab').addEventListener('click', () => selectPanel('litellm'));
 el('operations-management-tab').addEventListener('click', () => selectPanel('management'));
 el('operations-jobs-tab').addEventListener('click', () => selectPanel('jobs'));
-selectPanel('overview');
+window.addEventListener('hashchange', () => {
+  const panel = panelForSectionHash();
+  if (panel) selectPanel(panel);
+});
+selectPanel(panelForSectionHash() || 'overview');

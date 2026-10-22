@@ -154,6 +154,12 @@ function renderActivity(data) {
 function render(data) {
   renderProcesses(data.processes || {});
   renderActivity(data);
+  const storage = data.storage || {};
+  table('operations-storage', ['Mount', 'Device', 'Filesystem', 'Capacity', 'Used', 'Available', 'Usage'], (storage.items || []).map(disk => [
+    disk.mount, disk.source, disk.filesystem, gib(disk.total_bytes), gib(disk.used_bytes), gib(disk.available_bytes),
+    badge(percent(disk.used_percent), disk.used_percent >= 90 ? 'unavailable' : 'ok'),
+  ]), storage.message || 'Disk space unavailable.');
+  el('operations-storage-note').textContent = storage.message || '';
   const host = data.host || {};
   const memory = host.memory || {};
   const cpu = host.cpu || {};
@@ -238,7 +244,7 @@ async function refresh() {
     }
     render(data);
     el('operations-overview-content').hidden = false;
-    const unavailable = ['host', 'containers', 'strata', 'ollama', 'litellm', 'processes'].filter(key => data[key]?.status !== 'ok');
+    const unavailable = ['host', 'containers', 'strata', 'ollama', 'litellm', 'processes', 'storage'].filter(key => data[key]?.status !== 'ok');
     const time = new Date(data.sampled_at * 1000).toLocaleTimeString();
     status.textContent = `${data.demo ? 'Preview data · ' : ''}Updated ${time}${unavailable.length ? ` · unavailable or incomplete: ${unavailable.join(', ')}` : ''}`;
     status.classList.toggle('operations-error', unavailable.length > 0);

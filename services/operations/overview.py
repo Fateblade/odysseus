@@ -80,6 +80,31 @@ def gpus():
     return result
 
 
+def storage():
+    try:
+        result = subprocess.run(
+            ["df", "--local", "--block-size=1", "--output=source,fstype,size,used,avail,pcent,target"],
+            capture_output=True, text=True, timeout=5, env={**os.environ, "LC_ALL": "C"})
+        items = []
+        for line in result.stdout.splitlines()[1:]:
+            fields = line.split(maxsplit=6)
+            if len(fields) != 7 or fields[1] in ("tmpfs", "devtmpfs", "ramfs", "rootfs", "squashfs", "overlay", "efivarfs"):
+                continue
+            source, filesystem, total, used, available, percent, mount = fields
+            try:
+                items.append({"source": source, "filesystem": filesystem, "mount": mount,
+                              "total_bytes": int(total), "used_bytes": int(used), "available_bytes": int(available),
+                              "used_percent": int(percent.rstrip("%"))})
+            except ValueError:
+                continue
+        if not items:
+            raise ValueError()
+        return {"status": "ok" if result.returncode == 0 else "degraded", "items": items,
+                "message": "Local disk filesystems only. Available space excludes filesystem-reserved blocks."}
+    except (OSError, ValueError, subprocess.TimeoutExpired):
+        return {"status": "unavailable", "items": [], "message": "Disk space could not be sampled on the host."}
+
+
 def host_metrics(physical_memory_gib=0):
     from src.host_docker_access import running_in_container
     if platform.system() != "Linux":
@@ -186,7 +211,7 @@ def collect(base_url, strata_url, ollama_url, physical_memory_gib=0, config_path
     jobs = {"host": lambda: host_metrics(physical_memory_gib), "containers": containers,
             "strata": lambda: strata(strata_url), "ollama": lambda: ollama(ollama_url),
             "litellm": lambda: litellm(base_url), "processes": processes,
-            "gateway_activity": lambda: gateway_activity(base_url, config_path, container)}
+            "gateway_activity": lambda: gateway_activity(base_url, config_path, container), "storage": storage}
     result = {"configured": True, "sampled_at": time.time()}
     with ThreadPoolExecutor(max_workers=len(jobs)) as executor:
         futures = {name: executor.submit(job) for name, job in jobs.items()}
