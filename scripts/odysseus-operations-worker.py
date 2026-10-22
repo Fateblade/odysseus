@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 """Detached supervisor: persists results, bounds logs, and owns cancellation."""
 
+import argparse
 import json
 import os
 import signal
@@ -71,7 +72,8 @@ def supervise(folder, management):
         command = [interpreter, "-u", str(path), *specification["arguments"]]
         cwd = path.parent
     else:
-        command = [sys.executable, __file__, str(folder), str(management.path or ""), management.strata_url, management.ollama_url, "--execute"]
+        command = [sys.executable, __file__, str(folder), str(management.path or ""), management.strata_url, management.ollama_url,
+                   "--dwarfstar-url", management.dwarfstar_url, "--execute"]
         cwd = folder
     child = subprocess.Popen(command, cwd=cwd, env=environment, stdin=subprocess.DEVNULL,
                              stdout=subprocess.PIPE, stderr=subprocess.STDOUT, start_new_session=True)
@@ -124,16 +126,24 @@ def supervise(folder, management):
 
 
 if __name__ == "__main__":
-    folder = Path(sys.argv[1]).resolve()
-    management = Management(sys.argv[2], sys.argv[3], sys.argv[4])
+    parser = argparse.ArgumentParser()
+    parser.add_argument("folder", type=Path)
+    parser.add_argument("management_config")
+    parser.add_argument("strata_url")
+    parser.add_argument("ollama_url")
+    parser.add_argument("--dwarfstar-url", default="")
+    parser.add_argument("--execute", action="store_true")
+    args = parser.parse_args()
+    folder = args.folder.resolve()
+    management = Management(args.management_config, args.strata_url, args.ollama_url, args.dwarfstar_url)
     try:
-        if "--execute" in sys.argv:
+        if args.execute:
             perform(folder, management, json.loads((folder / "job.json").read_text())["specification"])
         else:
             supervise(folder, management)
     except Exception as error:
         print(str(error), flush=True)
-        if "--execute" not in sys.argv:
+        if not args.execute:
             record = json.loads((folder / "job.json").read_text())
             write_json(folder / "job.json", {**record, "state": "failed", "finished_at": time.time(), "error": "Worker failed; inspect its host log."})
         sys.exit(1)

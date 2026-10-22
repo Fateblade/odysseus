@@ -8,6 +8,7 @@ let initialized = false;
 let pendingPanel = null;
 let strataState = null;
 let strataReview = null;
+let dwarfstarAliases = [];
 let residencyVersion = 0;
 
 function node(tag, text = '', className = '') {
@@ -85,6 +86,16 @@ function renderResidency(data) {
     ['Generated tokens', strata.activity?.generated],
     ['Request elapsed', Number.isFinite(strata.activity?.elapsed_s) ? `${strata.activity.elapsed_s} s` : 'Not reported']]);
   if (!reachable) host.append(node('p', strata.message || 'Unable to read live status.', 'operations-error'));
+  const dwarfstar = data.dwarfstar || {};
+  dwarfstarAliases = dwarfstar.aliases || [];
+  const dwarfstarLive = el('operations-dwarfstar-live');
+  dwarfstarLive.replaceChildren(node('p', dwarfstar.status === 'ok' ? 'Model loaded; server ready' :
+    dwarfstar.status === 'disabled' ? 'Not configured' : 'Residency unknown — server stopped, starting or unreachable', 'operations-residency-state'));
+  if (dwarfstar.status === 'ok') {
+    facts(dwarfstarLive, [['Reported model', dwarfstar.model], ['Runtime context', tokens(dwarfstar.max_context)],
+      ['Accepted request names', dwarfstarAliases.join(', ')], ['Runtime allocation', 'Not reported']]);
+  }
+  dwarfstarLive.append(node('p', dwarfstar.message || 'DwarfStar status could not be read.', 'operations-muted'));
   const ollama = data.ollama || {};
   const list = el('operations-ollama-live');
   list.replaceChildren();
@@ -111,7 +122,7 @@ function renderResidency(data) {
     }));
   }
   const sampled = Number.isFinite(data.sampled_at) ? new Date(data.sampled_at * 1000).toLocaleTimeString() : 'Unknown';
-  for (const id of ['operations-strata-sampled', 'operations-ollama-sampled']) {
+  for (const id of ['operations-strata-sampled', 'operations-ollama-sampled', 'operations-dwarfstar-sampled']) {
     el(id).textContent = `Last sampled: ${sampled}. Refreshes every 5 seconds while this tab is visible.`;
   }
 }
@@ -125,7 +136,7 @@ async function refreshResidency() {
   } catch (error) {
     if (version !== residencyVersion) return;
     renderResidency({ strata: { message: error.message } });
-    for (const id of ['operations-strata-sampled', 'operations-ollama-sampled']) el(id).textContent = `Live refresh failed: ${error.message}`;
+    for (const id of ['operations-strata-sampled', 'operations-ollama-sampled', 'operations-dwarfstar-sampled']) el(id).textContent = `Live refresh failed: ${error.message}`;
   }
 }
 
@@ -239,6 +250,20 @@ function initialize() {
   strataActions.append(button('Refresh status', () => task(refreshResidency)));
   ['load', 'unload'].forEach(operation => strataActions.append(button(operation, () => task(() => manage({ target: 'strata', operation })))));
   strata.append(strataActions);
+  const dwarfstar = section(content, 'DwarfStar residency', 'DeepSeek V4 Flash is selected when the server starts. Starting loads the model; stopping releases it and interrupts requests. First unload Strata and Ollama models. Other backends are never stopped automatically.', 'operations-dwarfstar-residency');
+  const dwarfstarLive = node('div', 'Reading live status…');
+  dwarfstarLive.id = 'operations-dwarfstar-live';
+  const dwarfstarSampled = node('p', '', 'operations-muted');
+  dwarfstarSampled.id = 'operations-dwarfstar-sampled';
+  const dwarfstarActions = node('div', '', 'cookbook-actions');
+  dwarfstarActions.append(button('Refresh status', () => task(refreshResidency)));
+  for (const operation of ['start', 'stop']) {
+    const control = button(`${operation === 'start' ? 'Start' : 'Stop'} DwarfStar`, () => task(() => manage({ target: 'service', name: 'dwarfstar', operation })));
+    control.id = `operations-dwarfstar-${operation}`;
+    control.disabled = true;
+    dwarfstarActions.append(control);
+  }
+  dwarfstar.append(dwarfstarLive, dwarfstarSampled, dwarfstarActions, node('p', 'Start and stop controls require a dwarfstar entry in the host service configuration. Startup can take time; refresh readiness and inspect the service logs.', 'operations-muted'));
   const configuration = section(content, 'Strata configuration', 'Choose quantization and context. Applying prepares the model, restarts Strata and verifies the result. New quantizations may need a download.', 'operations-strata-configuration');
   const contextStatus = node('p', 'Loading Strata configuration…', 'operations-status');
   contextStatus.id = 'operations-strata-config-status';
@@ -329,7 +354,13 @@ function initialize() {
   const benchmark = section(jobsContent, 'TPS benchmark', 'Compare repeated generations with an optional warmup. Decode TPS uses backend timings; end-to-end TPS includes loading, queueing and prefill. Caches are not cleared.', 'operations-benchmark');
   const grid = node('div', '', 'operations-grid');
   benchmark.append(grid);
-  field(grid, 'operations-benchmark-backend', 'Backend', 'ollama', ['ollama', 'strata']);
+  const backend = field(grid, 'operations-benchmark-backend', 'Backend', 'ollama', ['ollama', 'strata', 'dwarfstar']);
+  backend.addEventListener('change', () => {
+    if (backend.value === 'strata') el('operations-benchmark-model').value = strataState?.active_model || '';
+    if (backend.value === 'dwarfstar') el('operations-benchmark-model').value =
+      dwarfstarAliases.find(name => name === 'deepseek-v4-flash') || dwarfstarAliases[0] || 'deepseek-v4-flash';
+  });
+  benchmark.append(node('p', 'DwarfStar proof-of-concept benchmarks disable thinking. Its API supplies token usage but no native decode or prefill timing; those rates remain unavailable. End-to-end TPS is measured by the client.', 'operations-muted'));
   field(grid, 'operations-benchmark-model', 'Model name');
   el('operations-benchmark-model').setAttribute('list', suggestions.id);
   const runs = field(grid, 'operations-benchmark-runs', 'Measured runs', 3, null, 'number');
@@ -416,6 +447,7 @@ async function refreshManagement() {
   el('operations-management-content').hidden = false;
   options(el('operations-docker-name'), result.containers || []);
   const services = result.services || {};
+  for (const operation of ['start', 'stop']) el(`operations-dwarfstar-${operation}`).disabled = !Object.hasOwn(services, 'dwarfstar');
   const missing = result.unconfigured_services || [];
   const serviceSelect = el('operations-service-name');
   options(serviceSelect, [...Object.keys(services), ...missing]);
@@ -436,9 +468,6 @@ async function refreshManagement() {
   const draft = strataState && (el('operations-strata-quantization').value !== strataState.model || Number(el('operations-strata-context').value) !== strataState.configured_context);
   if (!strataState || (!draft && !strataReview)) await loadStrata();
   await refreshResidency();
-  el('operations-benchmark-backend').onchange = () => {
-    if (el('operations-benchmark-backend').value === 'strata') el('operations-benchmark-model').value = strataState?.active_model || '';
-  };
 }
 
 async function loadStrata() {

@@ -9,14 +9,20 @@ from services.operations.litellm_host import NoRedirect
 
 
 def sample(management, specification):
-    ollama = specification["backend"] == "ollama"
-    base = management.ollama_url if ollama else management.strata_url
+    backend = specification["backend"]
+    ollama = backend == "ollama"
+    endpoints = {"ollama": management.ollama_url, "strata": management.strata_url, "dwarfstar": management.dwarfstar_url}
+    base = endpoints.get(backend)
+    if not base:
+        raise RuntimeError("The benchmark backend is not configured.")
     payload = {"model": specification["model"], "stream": True}
     if ollama:
         payload.update(prompt=specification["prompt"], options={"num_predict": specification["max_tokens"], "temperature": 0, "seed": 42})
     else:
         payload.update(messages=[{"role": "user", "content": specification["prompt"]}],
                        max_tokens=specification["max_tokens"], temperature=0, seed=42, stream_options={"include_usage": True})
+    if backend == "dwarfstar":
+        payload["think"] = False
     request = Request(base.rstrip("/") + ("/api/generate" if ollama else "/v1/chat/completions"),
                       data=json.dumps(payload).encode(), headers={"Content-Type": "application/json"})
     start = time.perf_counter()
@@ -86,4 +92,5 @@ def run(management, specification):
         summary[key] = statistics.median(values) if values else None
     return {"backend": specification["backend"], "model": specification["model"], "summary": summary,
             "samples": samples, "warmup": warmup, "temperature": 0, "seed": 42,
+            "thinking": False if specification["backend"] == "dwarfstar" else "backend default",
             "note": "Warmup does not clear caches. End-to-end TPS includes load, queue and prefill; unavailable timings stay null."}

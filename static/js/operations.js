@@ -1,7 +1,7 @@
 import { applyColors, applyFontDensity, getSaved } from './theme.js';
-import { closeOverview, openOverview } from './operationsOverview.js?v=20261022sections1';
-import { openManagement, closeManagement } from './operationsManagement.js?v=20261020activity1';
-import { showSections, panelForSectionHash } from './operationsNavigation.js?v=20261022sections1';
+import { closeOverview, openOverview } from './operationsOverview.js?v=20261022dwarfstar1';
+import { openManagement, closeManagement } from './operationsManagement.js?v=20261022dwarfstar1';
+import { showSections, panelForSectionHash } from './operationsNavigation.js?v=20261022dwarfstar1';
 
 const endpoint = '/api/operations/litellm';
 let state = null;

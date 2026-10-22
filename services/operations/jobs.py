@@ -97,7 +97,8 @@ def enqueue(management, specification):
         worker = Path(__file__).resolve().parents[2] / "scripts" / "odysseus-operations-worker.py"
         try:
             with (folder / "worker.log").open("wb") as log:
-                subprocess.Popen([sys.executable, str(worker), str(folder), str(management.path or ""), management.strata_url, management.ollama_url],
+                subprocess.Popen([sys.executable, str(worker), str(folder), str(management.path or ""), management.strata_url, management.ollama_url,
+                                  "--dwarfstar-url", management.dwarfstar_url],
                                  stdin=subprocess.DEVNULL, stdout=log, stderr=log, start_new_session=True, close_fds=True)
         except OSError:
             write_json(folder / "job.json", {**record, "state": "failed", "error": "Could not start host worker."})
@@ -153,8 +154,10 @@ def execute(management, payload):
         if payload.get("kind") == "benchmark":
             from services.operations.management import model_name
             backend = payload.get("backend")
-            if backend not in ("ollama", "strata"):
-                raise OperationsError("Choose Ollama or Strata.")
+            if backend not in ("ollama", "strata", "dwarfstar"):
+                raise OperationsError("Choose Ollama, Strata or DwarfStar.")
+            if backend == "dwarfstar" and not management.dwarfstar_url:
+                raise OperationsError("Configure the DwarfStar endpoint on the host helper first.", 503)
             prompt = payload.get("prompt", "")
             if not isinstance(prompt, str) or not 1 <= len(prompt) <= 32768:
                 raise OperationsError("Supply a prompt of 1–32768 characters.")

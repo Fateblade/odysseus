@@ -35,28 +35,32 @@ def model_name(value):
 
 
 class Management:
-    def __init__(self, settings_path, strata_url, ollama_url):
+    def __init__(self, settings_path, strata_url, ollama_url, dwarfstar_url=""):
         self.path = Path(settings_path).expanduser() if settings_path else None
         self.settings = json.loads(self.path.read_text()) if self.path and self.path.exists() else {}
         self.strata_url = strata_url
         self.ollama_url = ollama_url
+        self.dwarfstar_url = dwarfstar_url
 
     def catalog(self):
+        names = ["strata", "ollama"] + (["dwarfstar"] if self.dwarfstar_url else [])
         return {"containers": self.settings.get("containers", []),
                 "protected_containers": self.settings.get("protected_containers", ["odysseus-odysseus-1"]),
                 "services": self.settings.get("services", {}),
-                "unconfigured_services": [name for name in ("strata", "ollama") if name not in self.settings.get("services", {})],
+                "unconfigured_services": [name for name in names if name not in self.settings.get("services", {})],
                 "scripts_enabled": bool(self.settings.get("scripts_root")),
                 "configured": True}
 
     def residency(self):
+        from services.operations.dwarfstar import inventory
         from services.operations.overview import ollama, strata
 
-        with ThreadPoolExecutor(max_workers=2) as executor:
+        with ThreadPoolExecutor(max_workers=3) as executor:
             strata_result = executor.submit(strata, self.strata_url)
             ollama_result = executor.submit(ollama, self.ollama_url)
+            dwarfstar_result = executor.submit(inventory, self.dwarfstar_url)
             return {"configured": True, "strata": strata_result.result(),
-                    "ollama": ollama_result.result(), "sampled_at": time.time()}
+                    "ollama": ollama_result.result(), "dwarfstar": dwarfstar_result.result(), "sampled_at": time.time()}
 
     def service(self, name, operation, check=True):
         setting = self.settings.get("services", {}).get(name)

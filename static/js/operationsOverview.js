@@ -141,6 +141,11 @@ function renderActivity(data) {
   const ollama = node('article');
   ollama.append(node('h3', 'Ollama'), node('p', 'Its API does not expose an active-request list. Loaded models may be idle. Use the Ollama / runner processes below to identify resource activity.', 'operations-muted'));
   content.append(current, proxy, ollama);
+  if (data.dwarfstar?.configured) {
+    const dwarfstar = node('article');
+    dwarfstar.append(node('h3', 'DwarfStar'), node('p', 'Readiness and model context are available. This API does not report active requests or GPU allocations. Use host process readings and TPS jobs for activity.', 'operations-muted'));
+    content.append(dwarfstar);
+  }
   table('operations-strata-requests', ['Started', 'ID', 'Model', 'Endpoint', 'State', 'Elapsed', 'Queue', 'Load', 'First token'], (strata.requests || []).map(row => [
     timestamp(row.started_at), row.id, row.model, row.path, row.state,
     seconds(row.wallclock_s), seconds(row.queue_s), seconds(row.load_s), seconds(row.first_token_s),
@@ -197,6 +202,12 @@ function render(data) {
     ollama.loaded_available ? `${ollama.loaded.length} models loaded` : 'Inventory unavailable');
   ollamaCard.append(node('p', ollama.installed_available ? `${ollama.installed.length} installed models` : ollama.message || 'Installed models unavailable', 'operations-muted'), action('Manage models', 'management'));
   services.append(ollamaCard);
+  const dwarfstar = data.dwarfstar || {};
+  const dwarfstarCard = service('DwarfStar', dwarfstar.status === 'ok' ? 'Ready' : dwarfstar.configured ? 'Unavailable' : 'Not configured',
+    dwarfstar.status, dwarfstar.model || dwarfstar.message || 'Optional DeepSeek V4 Flash backend');
+  if (dwarfstar.status === 'ok') dwarfstarCard.append(facts([['Context tokens', dwarfstar.max_context]]));
+  dwarfstarCard.append(node('p', 'The server holds one startup-selected model. Unload competing large models before starting it.', 'operations-muted'), action('Manage DwarfStar', 'management'));
+  services.append(dwarfstarCard);
   const lite = data.litellm || {};
   const gateway = service('LiteLLM', lite.status === 'ok' ? 'Ready' : text(lite.status), lite.status, 'Inference gateway');
   gateway.append(node('p', lite.message || 'Model aliases, routing and fallbacks.', 'operations-muted'), action('Edit models and routing', 'litellm'));
@@ -245,6 +256,7 @@ async function refresh() {
     render(data);
     el('operations-overview-content').hidden = false;
     const unavailable = ['host', 'containers', 'strata', 'ollama', 'litellm', 'processes', 'storage'].filter(key => data[key]?.status !== 'ok');
+    if (data.dwarfstar?.configured && data.dwarfstar.status !== 'ok') unavailable.push('dwarfstar');
     const time = new Date(data.sampled_at * 1000).toLocaleTimeString();
     status.textContent = `${data.demo ? 'Preview data · ' : ''}Updated ${time}${unavailable.length ? ` · unavailable or incomplete: ${unavailable.join(', ')}` : ''}`;
     status.classList.toggle('operations-error', unavailable.length > 0);

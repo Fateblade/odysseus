@@ -19,6 +19,7 @@ def main():
     parser.add_argument("--base-url", default="http://127.0.0.1:4000")
     parser.add_argument("--strata-url", default="http://127.0.0.1:8081")
     parser.add_argument("--ollama-url", default="http://127.0.0.1:11434")
+    parser.add_argument("--dwarfstar-url", default="")
     parser.add_argument("--physical-memory-gib", type=int, default=0)
     parser.add_argument("--management-config", default="")
     args = parser.parse_args()
@@ -31,10 +32,10 @@ def main():
             raise OperationsError("The operation request must be a JSON object.")
         if payload.get("action") == "overview":
             from services.operations.overview import collect
-            result = collect(args.base_url, args.strata_url, args.ollama_url, args.physical_memory_gib, args.config, args.container)
+            result = collect(args.base_url, args.strata_url, args.ollama_url, args.physical_memory_gib, args.config, args.container, args.dwarfstar_url)
         elif payload.get("action") in ("management", "residency", "manage", "jobs", "job_detail", "job_start", "job_cancel", "script_save", "strata_config", "strata_preview", "strata_apply"):
             from services.operations.management import Management
-            management = Management(args.management_config, args.strata_url, args.ollama_url)
+            management = Management(args.management_config, args.strata_url, args.ollama_url, args.dwarfstar_url)
             if payload["action"].startswith("strata_"):
                 from services.operations.strata_config import snapshot, review, enqueue_apply
                 operation = {"strata_config": snapshot, "strata_preview": review, "strata_apply": enqueue_apply}[payload["action"]]

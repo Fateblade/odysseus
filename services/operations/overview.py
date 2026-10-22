@@ -203,13 +203,15 @@ def litellm(base_url):
         return {"status": "unavailable", "message": "LiteLLM is not responding to its liveness probe."}
 
 
-def collect(base_url, strata_url, ollama_url, physical_memory_gib=0, config_path="", container="litellm"):
+def collect(base_url, strata_url, ollama_url, physical_memory_gib=0, config_path="", container="litellm", dwarfstar_url=""):
     from services.operations.activity import processes, gateway_activity
+    from services.operations.dwarfstar import inventory
     from src.host_docker_access import running_in_container
     if platform.system() != "Linux" or running_in_container():
         return {"configured": False, "message": "Connect the helper on the Linux host. Container and Windows readings are not substituted for host telemetry."}
     jobs = {"host": lambda: host_metrics(physical_memory_gib), "containers": containers,
             "strata": lambda: strata(strata_url), "ollama": lambda: ollama(ollama_url),
+            "dwarfstar": lambda: inventory(dwarfstar_url),
             "litellm": lambda: litellm(base_url), "processes": processes,
             "gateway_activity": lambda: gateway_activity(base_url, config_path, container), "storage": storage}
     result = {"configured": True, "sampled_at": time.time()}
