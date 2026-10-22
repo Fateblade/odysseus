@@ -97,7 +97,7 @@ def process_usage(first, second, elapsed, ticks, page_size):
                      "gpu_engine_percent": round(gpu_ns / elapsed / 1e9 * 100, 1) if measured else None,
                      "gpu_vram_bytes": sum(allocations) if allocations else None})
     selected = {}
-    for key, count in (("cpu_percent", 25), ("rss_bytes", 10), ("gpu_engine_percent", 10), ("gpu_vram_bytes", 10)):
+    for key, count in (("cpu_percent", 25), ("rss_bytes", 30), ("gpu_engine_percent", 10), ("gpu_vram_bytes", 10)):
         for row in sorted(rows, key=lambda row: row[key] or 0, reverse=True)[:count]:
             selected[row["pid"]] = row
     return sorted(selected.values(), key=lambda row: row["cpu_percent"] or 0, reverse=True)

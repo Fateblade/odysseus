@@ -4,6 +4,7 @@ let active = false;
 let loading = false;
 let processState = null;
 const gib = value => Number.isFinite(value) ? `${(value / 1024 ** 3).toFixed(1)} GiB` : 'Unavailable';
+const memorySize = value => Number.isFinite(value) ? (value < 1024 ** 3 ? `${(value / 1024 ** 2).toFixed(1)} MiB` : gib(value)) : 'Unavailable';
 const percent = value => Number.isFinite(value) ? `${value.toFixed(1)}%` : 'Unavailable';
 const text = value => value ?? 'Unavailable';
 
@@ -140,12 +141,12 @@ function renderProcesses(processes) {
   const rows = [...(processes.items || [])].sort((a, b) => (b[sort] ?? -1) - (a[sort] ?? -1)).slice(0, 30);
   const states = { R: 'Running', S: 'Sleeping', D: 'I/O wait', T: 'Stopped', t: 'Tracing stop', I: 'Idle' };
   table('operations-processes', ['PID', 'Process', 'Container / service', 'State', 'CPU', 'RAM (RSS)', 'GPU engines', 'GPU memory', 'Threads'], rows.map(row => [
-    row.pid, processDetails(row), processOwner(row), states[row.state] || row.state, percent(row.cpu_percent), gib(row.rss_bytes),
+    row.pid, processDetails(row), processOwner(row), states[row.state] || row.state, percent(row.cpu_percent), memorySize(row.rss_bytes),
     Number.isFinite(row.gpu_engine_percent) ? percent(row.gpu_engine_percent) : 'Not reported',
     Number.isFinite(row.gpu_vram_bytes) ? gib(row.gpu_vram_bytes) : 'Not reported', row.threads,
   ]), processes.message || 'No process readings available.');
   el('operations-process-note').textContent = processes.status !== 'ok' ? processes.message || 'Process sampling unavailable.' :
-    `${processes.visible_processes} readable processes; ${rows.length} shown. Sample: ${seconds(processes.sample_seconds)}. ${processes.skipped || 0} exited or unreadable. ` +
+    `${processes.visible_processes} readable processes; ${rows.length} shown. Sample: ${seconds(processes.sample_seconds)}. ${processes.skipped || 0} exited or unreadable. This is a selected list, not all processes. RSS totals do not reconcile with Linux RAM in use. ` +
     (processes.gpu_available ? 'GPU counters are reported only where the driver and process permissions allow access.' : 'Per-process GPU counters unavailable; check aggregate GPU utilization above.');
 }
 
@@ -210,11 +211,25 @@ function render(data) {
     metric('Swap used', gib(memory.swap_used_bytes), `Of ${gib(memory.swap_total_bytes)} configured`),
   );
   const allocations = el('operations-memory');
-  allocations.replaceChildren(memoryRow('Linux RAM', used, memory.total_bytes, `${gib(memory.available_bytes)} available to applications`, 'ram'));
+  const breakdownOpen = allocations.querySelector('.operations-memory-breakdown')?.open || false;
+  allocations.replaceChildren(memoryRow('Linux RAM in use', used, memory.total_bytes, `${gib(memory.available_bytes)} available. In use = total minus estimated available; this is not a sum of process RSS.`, 'ram'));
   for (const gpu of host.gpus || []) {
     allocations.append(memoryRow('GPU memory', gpu.vram_used_bytes, gpu.vram_total_bytes,
       `GTT: ${gib(gpu.gtt_used_bytes)} allocated of ${gib(gpu.gtt_total_bytes)} shared-access limit`, 'gpu'));
   }
+  const breakdown = node('details', '', 'operations-memory-breakdown');
+  breakdown.open = breakdownOpen;
+  breakdown.append(node('summary', 'Linux memory breakdown'));
+  const facts = node('dl');
+  for (const [label, key] of [
+    ['Free', 'free_bytes'], ['Available (estimate)', 'available_bytes'], ['Anonymous pages', 'anonymous_bytes'],
+    ['Page cache (includes shared memory)', 'cached_bytes'], ['Buffers', 'buffers_bytes'],
+    ['Shared memory / tmpfs', 'shared_bytes'], ['Kernel slab', 'slab_bytes'],
+    ['Reclaimable slab (part of slab)', 'slab_reclaimable_bytes'], ['Kernel stacks', 'kernel_stack_bytes'],
+    ['Page tables', 'page_tables_bytes'],
+  ]) facts.append(node('dt', label), node('dd', memorySize(memory[key])));
+  breakdown.append(facts, node('p', 'These are overlapping Linux counters, not slices to add together. Available includes memory the kernel estimates it can reclaim. Process RSS can count shared pages more than once; kernel allocations and unmapped cache are outside process RSS.', 'operations-muted'));
+  allocations.append(breakdown);
   el('operations-host-name').textContent = host.hostname ? `${cpu.name || host.hostname} / ${host.kernel || 'Kernel unavailable'}` : host.message || 'Host unavailable';
   el('operations-sidebar-host').textContent = host.hostname || 'Host unavailable';
   const services = el('operations-services');

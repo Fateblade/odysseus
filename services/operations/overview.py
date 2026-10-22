@@ -44,7 +44,12 @@ def memory():
             values[key] = int(parts[0]) * 1024
     total, available = values.get("MemTotal"), values.get("MemAvailable")
     swap_total, swap_free = values.get("SwapTotal"), values.get("SwapFree")
-    return {"total_bytes": total, "available_bytes": available,
+    breakdown = {name: values.get(key) for name, key in (
+        ("free_bytes", "MemFree"), ("anonymous_bytes", "AnonPages"), ("cached_bytes", "Cached"),
+        ("buffers_bytes", "Buffers"), ("shared_bytes", "Shmem"), ("slab_bytes", "Slab"),
+        ("slab_reclaimable_bytes", "SReclaimable"), ("kernel_stack_bytes", "KernelStack"),
+        ("page_tables_bytes", "PageTables"))}
+    return {**breakdown, "total_bytes": total, "available_bytes": available,
             "used_bytes": total - available if total is not None and available is not None else None,
             "swap_total_bytes": swap_total,
             "swap_used_bytes": swap_total - swap_free if swap_total is not None and swap_free is not None else None}

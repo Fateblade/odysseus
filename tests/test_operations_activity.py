@@ -154,3 +154,36 @@ def test_inventory_returns_full_ids_without_inspecting_container_secrets(monkeyp
     assert result['items'][0]['id'] == 'a' * 64
     assert '--no-trunc' in calls[0]
     assert 'inspect' not in calls[0]
+
+
+def test_memory_reports_kernel_and_cache_counters_without_changing_used_formula(monkeypatch):
+    monkeypatch.setattr(overview, 'read_text', lambda path: '''MemTotal: 10000 kB
+MemAvailable: 4500 kB
+MemFree: 1000 kB
+AnonPages: 2000 kB
+Cached: 4000 kB
+Buffers: 100 kB
+Shmem: 500 kB
+Slab: 800 kB
+SReclaimable: 600 kB
+KernelStack: 30 kB
+PageTables: 40 kB
+SwapTotal: 2000 kB
+SwapFree: 1800 kB
+''')
+    result = overview.memory()
+    assert result['used_bytes'] == 5500 * 1024
+    assert result['cached_bytes'] == 4000 * 1024
+    assert result['shared_bytes'] == 500 * 1024
+    assert result['slab_bytes'] == 800 * 1024
+    assert result['slab_reclaimable_bytes'] == 600 * 1024
+    assert result['kernel_stack_bytes'] == 30 * 1024
+    assert result['page_tables_bytes'] == 40 * 1024
+    monkeypatch.setattr(overview, 'read_text', lambda path: None)
+    assert all(value is None for value in overview.memory().values())
+
+
+def test_process_candidates_preserve_top_thirty_memory_consumers():
+    processes = {pid: {**process(), 'rss_pages': pid, 'pid': pid} for pid in range(1, 101)}
+    rows = activity.process_usage(processes, processes, 1, 100, 4096)
+    assert set(range(71, 101)).issubset({row['pid'] for row in rows})

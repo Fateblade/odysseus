@@ -9,3 +9,13 @@ Expand the process name to see its executable path and parent PID. Expand **Cont
 Ownership uses cgroup identity, not guesses based on executable names. Docker inventory is sampled in parallel with processes, so a container created or removed during sampling may be unresolved until the next refresh. Restricted `/proc` access can make executable paths unavailable. If Docker inventory cannot be read, the ID remains visible with the container name marked unavailable. Both systemd Docker scopes and Docker cgroup directory paths are supported.
 
 Deploy by pulling `feature/linux-ai-operations-dwarfstar` and rebuilding/recreating only Odysseus using your existing image tag. The existing SSH helper reads the updated host source. No additional host service, package installation or gateway recreation is needed for process ownership.
+
+## Why process RAM does not equal host RAM in use
+
+The host figure is `MemTotal - MemAvailable`. Linux estimates available memory including some reclaimable cache and slab; it is not simply free RAM. The process table shows at most 30 selected rows, with the top 30 RSS consumers included when sorting by RAM. Small allocations use MiB to avoid rounding them to 0.0 or 0.1 GiB.
+
+RSS is each process's resident memory, including shared pages, so adding RSS values can count a page repeatedly. Kernel allocations and cache not mapped by a process are outside those process values. The difference cannot be assigned precisely from a process screenshot.
+
+Expand **Shared memory / Linux memory breakdown** to see free/available RAM, anonymous pages, cache, shared memory/tmpfs, slab, kernel stacks and page tables. The counters overlap: cache includes shared memory and reclaimable slab is a subset of slab. They are diagnostic counters, not a partition of used RAM. GPU and Linux counters also overlap on this shared-memory machine.
+
+Reference: [Linux kernel /proc documentation](https://www.kernel.org/doc/html/latest/filesystems/proc.html).

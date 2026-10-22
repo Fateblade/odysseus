@@ -202,3 +202,8 @@ body.operations-page { --operations-muted: color-mix(in srgb, var(--fg) 68%, var
 #operations-processes details { display: block; padding: 8px; background: var(--panel); color: var(--fg); border-color: var(--border); }
 #operations-processes details p { margin: 6px 0; color: var(--fg); }
 #operations-processes summary { padding: 0; cursor: pointer; background: transparent; color: var(--fg); }
+
+.operations-memory-breakdown { margin-top: 16px; background: var(--panel); color: var(--fg); }
+.operations-memory-breakdown dl { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 6px 16px; }
+.operations-memory-breakdown dd { margin: 0; }
+.operations-memory-breakdown p { color: var(--fg); }
