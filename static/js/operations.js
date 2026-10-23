@@ -1,6 +1,6 @@
 import { applyColors, applyFontDensity, getSaved } from './theme.js';
-import { closeOverview, openOverview } from './operationsOverview.js?v=20261022memory1';
-import { openManagement, closeManagement } from './operationsManagement.js?v=20261022dwarfstarcontext1';
+import { closeOverview, openOverview } from './operationsOverview.js?v=20261023overviewfix1';
+import { openManagement, closeManagement } from './operationsManagement.js?v=20261023overviewfix1';
 import { showSections, panelForSectionHash } from './operationsNavigation.js?v=20261022audit1';
 import { openAudit } from './operationsAudit.js?v=20261022audit1';
 

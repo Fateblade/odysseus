@@ -3,6 +3,7 @@ let active = null;
 let timer = null;
 let busy = false;
 let polling = false;
+let lastActionError = null;
 let selectedJob = null;
 let initialized = false;
 let pendingPanel = null;
@@ -143,6 +144,7 @@ async function refreshResidency() {
 }
 
 function status(message, error = false) {
+  if (polling && lastActionError && !busy) return;
   const item = el(`operations-${active}-message`);
   if (!item) return;
   item.textContent = message;
@@ -182,9 +184,10 @@ function confirmOperation(text) {
 async function task(action) {
   if (busy) return;
   busy = true;
+  lastActionError = null;
   status('Working…');
   try { await action(); }
-  catch (error) { status(error.message, true); }
+  catch (error) { lastActionError = error.message; status(error.message, true); }
   finally {
     busy = false;
     const pending = pendingPanel;

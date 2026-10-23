@@ -220,15 +220,15 @@ function render(data) {
   const breakdown = node('details', '', 'operations-memory-breakdown');
   breakdown.open = breakdownOpen;
   breakdown.append(node('summary', 'Linux memory breakdown'));
-  const facts = node('dl');
+  const memoryFacts = node('dl');
   for (const [label, key] of [
     ['Free', 'free_bytes'], ['Available (estimate)', 'available_bytes'], ['Anonymous pages', 'anonymous_bytes'],
     ['Page cache (includes shared memory)', 'cached_bytes'], ['Buffers', 'buffers_bytes'],
     ['Shared memory / tmpfs', 'shared_bytes'], ['Kernel slab', 'slab_bytes'],
     ['Reclaimable slab (part of slab)', 'slab_reclaimable_bytes'], ['Kernel stacks', 'kernel_stack_bytes'],
     ['Page tables', 'page_tables_bytes'],
-  ]) facts.append(node('dt', label), node('dd', memorySize(memory[key])));
-  breakdown.append(facts, node('p', 'These are overlapping Linux counters, not slices to add together. Available includes memory the kernel estimates it can reclaim. Process RSS can count shared pages more than once; kernel allocations and unmapped cache are outside process RSS.', 'operations-muted'));
+  ]) memoryFacts.append(node('dt', label), node('dd', memorySize(memory[key])));
+  breakdown.append(memoryFacts, node('p', 'These are overlapping Linux counters, not slices to add together. Available includes memory the kernel estimates it can reclaim. Process RSS can count shared pages more than once; kernel allocations and unmapped cache are outside process RSS.', 'operations-muted'));
   allocations.append(breakdown);
   el('operations-host-name').textContent = host.hostname ? `${cpu.name || host.hostname} / ${host.kernel || 'Kernel unavailable'}` : host.message || 'Host unavailable';
   el('operations-sidebar-host').textContent = host.hostname || 'Host unavailable';

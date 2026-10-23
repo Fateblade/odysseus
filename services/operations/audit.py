@@ -167,7 +167,8 @@ def run_operation(management, payload, operation):
     try:
         result = operation()
     except Exception as error:
-        emit(directory(management), "operation.failed", **fields, error_type=type(error).__name__)
+        emit(directory(management), "operation.failed", **fields, error_type=type(error).__name__,
+             status_code=getattr(error, "status", None))
         raise
     emit(directory(management), "operation.accepted" if isinstance(result, dict) and result.get("job") else "operation.completed",
          **fields, job_id=result.get("job", {}).get("id") if isinstance(result, dict) else None)

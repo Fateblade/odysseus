@@ -229,3 +229,16 @@ def test_gateway_overwrites_both_metadata_variants(callback, tmp_path):
     assert result['litellm_metadata']['odysseus_audit']['actor'] == 'verified'
     assert result['litellm_params']['metadata']['odysseus_audit']['actor'] == 'verified'
     assert audit.read(tmp_path)['events'][0]['actor'] == 'verified'
+
+
+def test_operations_record_failure_status_without_exception_text(tmp_path):
+    from services.operations.litellm_config import OperationsError
+    management = types.SimpleNamespace(settings={'audit_directory': str(tmp_path)})
+    def reject():
+        raise OperationsError('private detail', 409)
+    with pytest.raises(OperationsError):
+        audit.run_operation(management, {'action': 'job_start', 'kind': 'benchmark'}, reject)
+    failure = next(row for row in audit.read(tmp_path)['events'] if row['event'] == 'operation.failed')
+    assert failure['status_code'] == 409
+    assert failure['error_type'] == 'OperationsError'
+    assert 'private detail' not in (tmp_path / 'events.jsonl').read_text()
