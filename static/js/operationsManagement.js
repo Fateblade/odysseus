@@ -10,6 +10,9 @@ let initialized = false;
 let pendingPanel = null;
 let strataState = null;
 let strataReview = null;
+let mayaAliases = [];
+let mayaState = null;
+let mayaReview = null;
 let dwarfstarAliases = [];
 let dwarfstarState = null;
 let dwarfstarReview = null;
@@ -100,6 +103,13 @@ function renderResidency(data) {
       ['Accepted request names', dwarfstarAliases.join(', ')], ['Runtime allocation', 'Not reported']]);
   }
   dwarfstarLive.append(node('p', dwarfstar.message || 'DwarfStar status could not be read.', 'operations-muted'));
+  const maya = data.maya || {};
+  mayaAliases = maya.aliases || [];
+  const mayaLive = el('operations-maya-live');
+  mayaLive.replaceChildren(node('p', maya.status === 'ok' ? 'Model loaded; server ready' :
+    maya.status === 'unloaded' ? 'Unloaded' : maya.status === 'disabled' ? 'Not configured' : 'Unavailable or changing state', 'operations-residency-state'));
+  facts(mayaLive, [['Model', maya.model], ['Runtime context', tokens(maya.max_context)], ['Maya version', maya.version]]);
+  mayaLive.append(node('p', maya.message || 'Maya status could not be read.', 'operations-muted'));
   const ollama = data.ollama || {};
   const list = el('operations-ollama-live');
   list.replaceChildren();
@@ -126,7 +136,7 @@ function renderResidency(data) {
     }));
   }
   const sampled = Number.isFinite(data.sampled_at) ? new Date(data.sampled_at * 1000).toLocaleTimeString() : 'Unknown';
-  for (const id of ['operations-strata-sampled', 'operations-ollama-sampled', 'operations-dwarfstar-sampled']) {
+  for (const id of ['operations-strata-sampled', 'operations-ollama-sampled', 'operations-dwarfstar-sampled', 'operations-maya-sampled']) {
     el(id).textContent = `Last sampled: ${sampled}. Refreshes every 5 seconds while this tab is visible.`;
   }
 }
@@ -140,7 +150,7 @@ async function refreshResidency() {
   } catch (error) {
     if (version !== residencyVersion) return;
     renderResidency({ strata: { message: error.message } });
-    for (const id of ['operations-strata-sampled', 'operations-ollama-sampled', 'operations-dwarfstar-sampled']) el(id).textContent = `Live refresh failed: ${error.message}`;
+    for (const id of ['operations-strata-sampled', 'operations-ollama-sampled', 'operations-dwarfstar-sampled', 'operations-maya-sampled']) el(id).textContent = `Live refresh failed: ${error.message}`;
   }
 }
 
@@ -256,6 +266,36 @@ function initialize() {
   strataActions.append(button('Refresh status', () => task(refreshResidency)));
   ['load', 'unload'].forEach(operation => strataActions.append(button(operation, () => task(() => manage({ target: 'strata', operation })))));
   strata.append(strataActions);
+  const maya = section(content, 'Maya residency', 'Experimental DeepSeek V4.1 Maya-XS backend. Unload competing models before starting. Controls use the host job queue; no automatic backend switching.', 'operations-maya-residency');
+  const mayaLive = node('div', 'Reading live status…'); mayaLive.id = 'operations-maya-live';
+  const mayaSampled = node('p', '', 'operations-muted'); mayaSampled.id = 'operations-maya-sampled';
+  maya.append(mayaLive, mayaSampled);
+  for (const operation of ['start', 'stop']) {
+    const control = button(`${operation === 'start' ? 'Start' : 'Stop'} Maya`, () => task(() => manage({ target: 'service', name: 'maya', operation })));
+    control.id = `operations-maya-${operation}`; control.disabled = true; maya.append(control);
+  }
+  maya.append(button('Refresh status', () => task(refreshResidency)));
+  const mayaStatus = node('p', 'Load context limits when Maya is ready.', 'operations-status'); mayaStatus.id = 'operations-maya-config-status';
+  const mayaFields = node('div'); mayaFields.id = 'operations-maya-config-fields'; mayaFields.hidden = true;
+  const mayaContext = field(mayaFields, 'operations-maya-context', 'Maximum context (tokens)', 4096, null, 'number'); mayaContext.step = 1;
+  const mayaChange = node('pre', '', 'operations-diff'); mayaChange.id = 'operations-maya-change'; mayaChange.hidden = true;
+  const mayaApply = button('Apply context', () => task(async () => {
+    if (!mayaReview) throw new Error('Review the context change first.');
+    if (!await confirmOperation(`Set Maya context to ${mayaReview.context.toLocaleString()}? Native reload saves its config and may interrupt requests. On failure Maya attempts recovery. Cancelling the host job does not cancel a native reload.`)) return;
+    const result = await request('maya/apply', { revision: mayaReview.revision, context: mayaReview.context, review_digest: mayaReview.review_digest });
+    mayaReview = null; mayaState = null; mayaApply.disabled = true; mayaChange.hidden = true;
+    selectedJob = result.job.id; status('Maya context job queued.'); await refreshJobs();
+  }));
+  mayaApply.id = 'operations-maya-apply'; mayaApply.disabled = true;
+  mayaFields.append(button('Review context change', () => task(async () => {
+    mayaReview = null; mayaApply.disabled = true;
+    const context = Number(mayaContext.value); const revision = mayaState?.revision;
+    const reviewed = await request('maya/preview', { revision, context });
+    if (Number(mayaContext.value) !== context || mayaState?.revision !== revision) throw new Error('Context changed during review. Review again.');
+    mayaReview = reviewed; mayaChange.textContent = reviewed.display_change; mayaChange.hidden = false; mayaApply.disabled = false;
+  })), mayaApply, mayaChange);
+  mayaContext.addEventListener('input', () => { mayaReview = null; mayaApply.disabled = true; mayaChange.hidden = true; });
+  maya.append(mayaStatus, button('Reload context limits', () => task(loadMaya)), mayaFields);
   const dwarfstar = section(content, 'DwarfStar residency', 'DeepSeek V4 Flash is selected when the server starts. Starting loads the model; stopping releases it and interrupts requests. First unload Strata and Ollama models. Other backends are never stopped automatically.', 'operations-dwarfstar-residency');
   const dwarfstarLive = node('div', 'Reading live status…');
   dwarfstarLive.id = 'operations-dwarfstar-live';
@@ -397,13 +437,14 @@ function initialize() {
   const benchmark = section(jobsContent, 'TPS benchmark', 'Compare repeated generations with an optional warmup. Decode TPS uses backend timings; end-to-end TPS includes loading, queueing and prefill. Caches are not cleared.', 'operations-benchmark');
   const grid = node('div', '', 'operations-grid');
   benchmark.append(grid);
-  const backend = field(grid, 'operations-benchmark-backend', 'Backend', 'ollama', ['ollama', 'strata', 'dwarfstar']);
+  const backend = field(grid, 'operations-benchmark-backend', 'Backend', 'ollama', ['ollama', 'strata', 'dwarfstar', 'maya']);
   backend.addEventListener('change', () => {
     if (backend.value === 'strata') el('operations-benchmark-model').value = strataState?.active_model || '';
+    if (backend.value === 'maya') el('operations-benchmark-model').value = mayaAliases[0] || 'deepseek-v4.1-flash';
     if (backend.value === 'dwarfstar') el('operations-benchmark-model').value =
       dwarfstarAliases.find(name => name === 'deepseek-v4-flash') || dwarfstarAliases[0] || 'deepseek-v4-flash';
   });
-  benchmark.append(node('p', 'DwarfStar proof-of-concept benchmarks disable thinking. Its API supplies token usage but no native decode or prefill timing; those rates remain unavailable. End-to-end TPS is measured by the client.', 'operations-muted'));
+  benchmark.append(node('p', 'DwarfStar and Maya comparison benchmarks disable thinking. Maya preserves native timings and draft acceptance when supplied. DwarfStar proof-of-concept benchmarks disable thinking. Its API supplies token usage but no native decode or prefill timing; those rates remain unavailable. End-to-end TPS is measured by the client.', 'operations-muted'));
   field(grid, 'operations-benchmark-model', 'Model name');
   el('operations-benchmark-model').setAttribute('list', suggestions.id);
   const runs = field(grid, 'operations-benchmark-runs', 'Measured runs', 3, null, 'number');
@@ -498,6 +539,7 @@ async function refreshManagement() {
   options(el('operations-docker-name'), result.containers || []);
   const services = result.services || {};
   for (const operation of ['start', 'stop']) el(`operations-dwarfstar-${operation}`).disabled = !Object.hasOwn(services, 'dwarfstar');
+  for (const operation of ['start', 'stop']) el(`operations-maya-${operation}`).disabled = !Object.hasOwn(services, 'maya');
   const missing = result.unconfigured_services || [];
   const serviceSelect = el('operations-service-name');
   options(serviceSelect, [...Object.keys(services), ...missing]);
@@ -520,6 +562,20 @@ async function refreshManagement() {
   const dwarfstarDraft = dwarfstarState && Number(el('operations-dwarfstar-context').value) !== dwarfstarState.configured_context;
   if (!dwarfstarState || (!dwarfstarDraft && !dwarfstarReview)) await loadDwarfstar();
   await refreshResidency();
+}
+
+async function loadMaya() {
+  mayaReview = null; mayaState = null;
+  el('operations-maya-apply').disabled = true; el('operations-maya-change').hidden = true;
+  el('operations-maya-config-fields').hidden = true;
+  const result = await request('maya/config');
+  el('operations-maya-config-status').textContent = result.configured ?
+    `Active: ${tokens(result.active_context)}. Operational ceiling: ${tokens(result.maximum_context)}. Test memory at each prompt depth.` : result.message;
+  if (result.configured) {
+    mayaState = result; el('operations-maya-context').value = result.active_context;
+    el('operations-maya-context').min = result.minimum_context; el('operations-maya-context').max = result.maximum_context;
+    el('operations-maya-config-fields').hidden = false;
+  }
 }
 
 async function loadDwarfstar() {

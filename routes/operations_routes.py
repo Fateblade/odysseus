@@ -115,6 +115,18 @@ def setup_operations_routes(service=None):
     async def apply_strata_config(request: Request):
         return await invoke(request, "strata_apply")
 
+    @router.get("/maya/config")
+    async def get_maya_config(request: Request):
+        return await invoke(request, "maya_config")
+
+    @router.post("/maya/preview")
+    async def preview_maya_config(request: Request):
+        return await invoke(request, "maya_preview")
+
+    @router.post("/maya/apply")
+    async def apply_maya_config(request: Request):
+        return await invoke(request, "maya_apply")
+
     @router.get("/dwarfstar/config")
     async def get_dwarfstar_config(request: Request):
         return await invoke(request, "dwarfstar_config")

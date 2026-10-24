@@ -251,6 +251,13 @@ function render(data) {
   if (dwarfstar.status === 'ok') dwarfstarCard.append(facts([['Context tokens', dwarfstar.max_context]]));
   dwarfstarCard.append(node('p', 'The server holds one startup-selected model. Unload competing large models before starting it.', 'operations-muted'), action('Manage DwarfStar', 'management'));
   services.append(dwarfstarCard);
+  if (data.maya?.configured) {
+    const maya = data.maya;
+    const card = service('Maya', maya.status === 'ok' ? 'Ready' : maya.status === 'unloaded' ? 'Unloaded' : 'Unavailable', maya.status,
+      maya.model || maya.message);
+    card.append(facts([['Context tokens', maya.max_context], ['Version', maya.version]]), action('Manage Maya', 'management'));
+    services.append(card);
+  }
   const lite = data.litellm || {};
   const gateway = service('LiteLLM', lite.status === 'ok' ? 'Ready' : text(lite.status), lite.status, 'Inference gateway');
   gateway.append(node('p', lite.message || 'Model aliases, routing and fallbacks.', 'operations-muted'), action('Edit models and routing', 'litellm'));

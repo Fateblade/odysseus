@@ -1,0 +1,39 @@
+{
+  "engine_repository": "https://github.com/mw00/project-maya",
+  "engine_version": "1.1.22",
+  "engine_revision": "ffe2e5e53fd5254e7f3492a20e8ad2b51b26a197",
+  "model_repository": "peasantsmith/DeepSeek-V4.1-Flash-1017-Maya-GGUF",
+  "model_revision": "c273fcbdda76a1db074c2f414cb70edbfca2f2ef",
+  "verified_metadata_date": "2026-10-23",
+  "architecture": "deepseek41",
+  "files": {
+    "Maya-XS/DeepSeek-V4.1-Flash-1017-Maya-XS-IQ1_S-00001-of-00005.gguf": {
+      "bytes": 47781530400,
+      "sha256": "a0cb7966afd68bc35c46f78018d1fa1d2e4bcbe3c3baf39f60cd1733ed9ad7e5"
+    },
+    "Maya-XS/DeepSeek-V4.1-Flash-1017-Maya-XS-IQ1_S-00002-of-00005.gguf": {
+      "bytes": 47775748128,
+      "sha256": "ba5afb43adfc667436ebcfbd82d25411fa2843ee7e1d877290611cd60f93cca1"
+    },
+    "Maya-XS/DeepSeek-V4.1-Flash-1017-Maya-XS-IQ1_S-00003-of-00005.gguf": {
+      "bytes": 19784230848,
+      "sha256": "1482443bb4957c8d2f005ded365445f98558ff05c50674f9ee9a96ddabc122a4"
+    },
+    "Maya-XS/DeepSeek-V4.1-Flash-1017-Maya-XS-IQ1_S-00004-of-00005.gguf": {
+      "bytes": 80641295472,
+      "sha256": "0d93315942c523d82f6dbc0a6e0e1751548e309f3963f96b82f92e8f9bc52e36"
+    },
+    "Maya-XS/DeepSeek-V4.1-Flash-1017-Maya-XS-IQ1_S-00005-of-00005.gguf": {
+      "bytes": 80643503412,
+      "sha256": "39bbc8cde8b17604fed9a7ba7fc6bc9c5e72e34733657943ac049b4b9ca2d340"
+    },
+    "dspark/dspark-xs2.bin": {
+      "bytes": 4251725568,
+      "sha256": "8dfe21082a6cb320f334fddb454630c241c6d44e0463eef4f8b0b07334511779"
+    },
+    "dspark/dspark-xs2.json": {
+      "bytes": 99146,
+      "sha256": "56d47ad12d6548a8d3d50a79be96451411f18d5b77064de7b8544bb2da22988f"
+    }
+  }
+}

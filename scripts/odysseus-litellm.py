@@ -21,6 +21,7 @@ def main():
     parser.add_argument("--strata-url", default="http://127.0.0.1:8081")
     parser.add_argument("--ollama-url", default="http://127.0.0.1:11434")
     parser.add_argument("--dwarfstar-url", default="")
+    parser.add_argument("--maya-url", default="")
     parser.add_argument("--physical-memory-gib", type=int, default=0)
     parser.add_argument("--management-config", default="")
     args = parser.parse_args()
@@ -33,7 +34,7 @@ def main():
             raise OperationsError("The operation request must be a JSON object.")
         from services.operations.management import Management
         from services.operations.audit import run_operation
-        management = Management(args.management_config, args.strata_url, args.ollama_url, args.dwarfstar_url)
+        management = Management(args.management_config, args.strata_url, args.ollama_url, args.dwarfstar_url, args.maya_url)
 
         def dispatch():
             return dispatch_request(args, management, payload)
@@ -55,9 +56,13 @@ def dispatch_request(args, management, payload):
         return {"configured": True, **read(directory(management), event_id=event_id)}
     if payload.get("action") == "overview":
         from services.operations.overview import collect
-        result = collect(args.base_url, args.strata_url, args.ollama_url, args.physical_memory_gib, args.config, args.container, args.dwarfstar_url)
-    elif payload.get("action") in ("management", "residency", "manage", "jobs", "measurements", "measurement_import", "job_detail", "job_start", "job_cancel", "script_save", "strata_config", "strata_preview", "strata_apply", "dwarfstar_config", "dwarfstar_preview", "dwarfstar_apply"):
-        if payload["action"].startswith("dwarfstar_"):
+        result = collect(args.base_url, args.strata_url, args.ollama_url, args.physical_memory_gib, args.config, args.container, args.dwarfstar_url, args.maya_url)
+    elif payload.get("action") in ("management", "residency", "manage", "jobs", "measurements", "measurement_import", "job_detail", "job_start", "job_cancel", "script_save", "strata_config", "strata_preview", "strata_apply", "dwarfstar_config", "dwarfstar_preview", "dwarfstar_apply", "maya_config", "maya_preview", "maya_apply"):
+        if payload["action"].startswith("maya_"):
+            from services.operations.maya_config import snapshot, review, enqueue_apply
+            operation = {"maya_config": snapshot, "maya_preview": review, "maya_apply": enqueue_apply}[payload["action"]]
+            result = operation(management) if payload["action"] == "maya_config" else operation(management, payload)
+        elif payload["action"].startswith("dwarfstar_"):
             from services.operations.dwarfstar_config import snapshot, review, enqueue_apply
             operation = {"dwarfstar_config": snapshot, "dwarfstar_preview": review, "dwarfstar_apply": enqueue_apply}[payload["action"]]
             result = operation(management) if payload["action"] == "dwarfstar_config" else operation(management, payload)

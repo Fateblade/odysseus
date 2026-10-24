@@ -24,6 +24,7 @@ class HostOperations:
         self.strata_url = env.get("ODYSSEUS_OPERATIONS_STRATA_URL", "http://127.0.0.1:8081")
         self.ollama_url = env.get("ODYSSEUS_OPERATIONS_OLLAMA_URL", "http://127.0.0.1:11434")
         self.dwarfstar_url = env.get("ODYSSEUS_OPERATIONS_DWARFSTAR_URL", "")
+        self.maya_url = env.get("ODYSSEUS_OPERATIONS_MAYA_URL", "")
         self.physical_memory_gib = env.get("ODYSSEUS_OPERATIONS_PHYSICAL_MEMORY_GIB", "0")
         self.management_path = env.get("ODYSSEUS_OPERATIONS_MANAGEMENT_CONFIG", "")
 
@@ -31,7 +32,7 @@ class HostOperations:
         if action not in ("snapshot", "preview", "probe", "apply", "overview") and not self.remote and not self.helper:
             from src.host_docker_access import running_in_container
             if sys.platform != "linux" or running_in_container():
-                if action in ("management", "residency", "jobs", "strata_config", "dwarfstar_config", "audit"):
+                if action in ("management", "residency", "jobs", "strata_config", "dwarfstar_config", "maya_config", "audit"):
                     return {"configured": False, "message": "Connect the Linux host helper to enable management and jobs."}
                 raise OperationsError("Linux host access is not configured.", 503)
         if not self.config_path and action in ("snapshot", "preview", "probe", "apply"):
@@ -50,7 +51,7 @@ class HostOperations:
             raise OperationsError("Configured physical memory must be between 0 and 4096 GiB.", 503)
         args = ["--config", self.config_path, "--container", self.container, "--base-url", self.base_url,
                 "--strata-url", self.strata_url, "--ollama-url", self.ollama_url, "--dwarfstar-url", self.dwarfstar_url,
-                "--physical-memory-gib", self.physical_memory_gib]
+                "--maya-url", self.maya_url, "--physical-memory-gib", self.physical_memory_gib]
         args.extend(["--management-config", self.management_path])
         if self.remote:
             if (not re.fullmatch(r"(?:[\w.-]+@)?[\w.:-]+", self.remote)

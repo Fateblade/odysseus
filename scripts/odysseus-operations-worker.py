@@ -29,6 +29,12 @@ def perform(folder, management, specification):
     kind = specification["kind"]
     if kind == "benchmark":
         result = benchmark(management, specification)
+    elif kind == "maya_service":
+        from services.operations.maya import run_service
+        result = run_service(management, specification)
+    elif kind == "maya_context":
+        from services.operations.maya_config import run
+        result = run(management, specification, folder)
     elif kind == "dwarfstar_context":
         from services.operations.dwarfstar_config import run
         result = run(management, specification, folder)
@@ -82,7 +88,7 @@ def supervise(folder, management):
         cwd = path.parent
     else:
         command = [sys.executable, __file__, str(folder), str(management.path or ""), management.strata_url, management.ollama_url,
-                   "--dwarfstar-url", management.dwarfstar_url, "--execute"]
+                   "--dwarfstar-url", management.dwarfstar_url, "--maya-url", management.maya_url, "--execute"]
         cwd = folder
     child = subprocess.Popen(command, cwd=cwd, env=environment, stdin=subprocess.DEVNULL,
                              stdout=subprocess.PIPE, stderr=subprocess.STDOUT, start_new_session=True)
@@ -145,10 +151,11 @@ if __name__ == "__main__":
     parser.add_argument("strata_url")
     parser.add_argument("ollama_url")
     parser.add_argument("--dwarfstar-url", default="")
+    parser.add_argument("--maya-url", default="")
     parser.add_argument("--execute", action="store_true")
     args = parser.parse_args()
     folder = args.folder.resolve()
-    management = Management(args.management_config, args.strata_url, args.ollama_url, args.dwarfstar_url)
+    management = Management(args.management_config, args.strata_url, args.ollama_url, args.dwarfstar_url, args.maya_url)
     try:
         if args.execute:
             perform(folder, management, json.loads((folder / "job.json").read_text())["specification"])

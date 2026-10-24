@@ -74,7 +74,7 @@ def execute(management, payload):
 def imported(payload):
     from services.operations.management import model_name
     backend = payload.get("backend")
-    if backend not in ("ollama", "strata", "dwarfstar"):
+    if backend not in ("ollama", "strata", "dwarfstar", "maya"):
         raise OperationsError("Choose a supported backend.")
     text = payload.get("jsonl", "")
     if not isinstance(text, str) or not 1 <= len(text) <= 262144:

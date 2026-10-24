@@ -35,16 +35,17 @@ def model_name(value):
 
 
 class Management:
-    def __init__(self, settings_path, strata_url, ollama_url, dwarfstar_url=""):
+    def __init__(self, settings_path, strata_url, ollama_url, dwarfstar_url="", maya_url=""):
         self.path = Path(settings_path).expanduser() if settings_path else None
         self.settings = json.loads(self.path.read_text()) if self.path and self.path.exists() else {}
         self.strata_url = strata_url
         self.ollama_url = ollama_url
         self.dwarfstar_url = dwarfstar_url
+        self.maya_url = maya_url
         self.audit_actor = {}
 
     def catalog(self):
-        names = ["strata", "ollama"] + (["dwarfstar"] if self.dwarfstar_url else [])
+        names = ["strata", "ollama"] + (["dwarfstar"] if self.dwarfstar_url else []) + (["maya"] if self.maya_url else [])
         return {"containers": self.settings.get("containers", []),
                 "protected_containers": self.settings.get("protected_containers", ["odysseus-odysseus-1"]),
                 "services": self.settings.get("services", {}),
@@ -55,13 +56,15 @@ class Management:
     def residency(self):
         from services.operations.dwarfstar import inventory
         from services.operations.overview import ollama, strata
+        from services.operations.maya import inventory as maya_inventory
 
-        with ThreadPoolExecutor(max_workers=3) as executor:
+        with ThreadPoolExecutor(max_workers=4) as executor:
             strata_result = executor.submit(strata, self.strata_url)
             ollama_result = executor.submit(ollama, self.ollama_url)
             dwarfstar_result = executor.submit(inventory, self.dwarfstar_url)
+            maya_result = executor.submit(maya_inventory, self.maya_url)
             return {"configured": True, "strata": strata_result.result(),
-                    "ollama": ollama_result.result(), "dwarfstar": dwarfstar_result.result(), "sampled_at": time.time()}
+                    "ollama": ollama_result.result(), "dwarfstar": dwarfstar_result.result(), "maya": maya_result.result(), "sampled_at": time.time()}
 
     def service(self, name, operation, check=True):
         setting = self.settings.get("services", {}).get(name)
@@ -102,6 +105,11 @@ class Management:
         if target == "service":
             if operation not in ("start", "stop", "restart", "status", "logs"):
                 raise OperationsError("Unknown service operation.")
+            if payload.get("name") == "maya" and operation in ("start", "stop", "restart"):
+                if not self.maya_url or "maya" not in self.settings.get("services", {}):
+                    raise OperationsError("Configure the Maya endpoint and allowlisted service first.", 503)
+                from services.operations.jobs import enqueue
+                return enqueue(self, {"kind": "maya_service", "operation": operation, "timeout": 900})
             result = self.service(payload.get("name"), operation, check=operation != "status")
             return {"status": "ok", "log": (result.stdout + result.stderr)[-65536:].decode(errors="replace")}
         if target == "strata":

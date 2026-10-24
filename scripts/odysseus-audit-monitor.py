@@ -38,6 +38,18 @@ def sample(management):
     probes = {"ollama": ollama, "strata": strata}
     if management.dwarfstar_url:
         probes["dwarfstar"] = dwarfstar
+    if management.maya_url:
+        from services.operations.maya import inventory as maya_inventory
+
+        def maya():
+            data = maya_inventory(management.maya_url)
+            if data.get("status") == "unloaded":
+                return []
+            if data.get("status") != "ok":
+                raise ValueError()
+            return [{"model": data.get("model"), "context": data.get("max_context")}]
+
+        probes["maya"] = maya
     result = {}
     with ThreadPoolExecutor(max_workers=len(probes)) as executor:
         futures = {name: executor.submit(probe) for name, probe in probes.items()}
@@ -74,12 +86,13 @@ def main():
     parser.add_argument("--ollama-url", default="http://127.0.0.1:11434")
     parser.add_argument("--strata-url", default="http://127.0.0.1:8081")
     parser.add_argument("--dwarfstar-url", default="")
+    parser.add_argument("--maya-url", default="")
     parser.add_argument("--interval", type=int, default=5)
     parser.add_argument("--once", action="store_true")
     args = parser.parse_args()
     if not 2 <= args.interval <= 300:
         parser.error("interval must be between 2 and 300 seconds")
-    management = Management(args.management_config, args.strata_url, args.ollama_url, args.dwarfstar_url)
+    management = Management(args.management_config, args.strata_url, args.ollama_url, args.dwarfstar_url, args.maya_url)
     folder = directory(management)
     folder.mkdir(parents=True, exist_ok=True, mode=0o700)
     path = folder / "residency-state.json"

@@ -31,7 +31,7 @@ def sample(management, specification):
 def _sample(management, specification):
     backend = specification["backend"]
     ollama = backend == "ollama"
-    endpoints = {"ollama": management.ollama_url, "strata": management.strata_url, "dwarfstar": management.dwarfstar_url}
+    endpoints = {"ollama": management.ollama_url, "strata": management.strata_url, "dwarfstar": management.dwarfstar_url, "maya": management.maya_url}
     base = endpoints.get(backend)
     if not base:
         raise RuntimeError("The benchmark backend is not configured.")
@@ -43,6 +43,8 @@ def _sample(management, specification):
                        max_tokens=specification["max_tokens"], temperature=0, seed=42, stream_options={"include_usage": True})
     if backend == "dwarfstar":
         payload["think"] = False
+    if backend == "maya":
+        payload["reasoning_effort"] = "none"
     request = Request(base.rstrip("/") + ("/api/generate" if ollama else "/v1/chat/completions"),
                       data=json.dumps(payload).encode(), headers={"Content-Type": "application/json"})
     start = time.perf_counter()
@@ -99,6 +101,9 @@ def _sample(management, specification):
     else:
         result.update(decode_tps=timings.get("predicted_per_second"), prefill_tps=timings.get("prompt_per_second"),
                       timings=timings, measurement="backend timings when supplied; client wall time otherwise")
+    offered, accepted = timings.get("draft_n"), timings.get("draft_n_accepted")
+    result["speculative_acceptance"] = (accepted / offered if type(offered) is int and offered > 0
+                                         and type(accepted) is int and 0 <= accepted <= offered else None)
     result["end_to_end_tps"] = tokens / elapsed if tokens else None
     if management.settings.get("audit_capture_content", True):
         result["captured_response"] = {"chunks": captured, "truncated": captured_size >= 2 * 1024 * 1024}
@@ -123,7 +128,7 @@ def run(management, specification):
     return {"backend": specification["backend"], "model": specification["model"], "summary": summary,
             "samples": samples, "warmup": warmup, "temperature": 0, "seed": 42,
             "environment": environment, "prompt_sha256": hashlib.sha256(specification["prompt"].encode()).hexdigest(),
-            "thinking": False if specification["backend"] == "dwarfstar" else "backend default",
+            "thinking": False if specification["backend"] in ("dwarfstar", "maya") else "backend default",
             "note": "Warmup does not clear caches. End-to-end TPS includes load, queue and prefill; unavailable timings stay null."}
 
 
@@ -131,6 +136,7 @@ def snapshot(management, specification):
     """Read settings outside the timed request; missing metadata never fails a run."""
     from services.operations import overview
     from services.operations.dwarfstar import inventory
+    from services.operations.maya import inventory as maya_inventory
     from pathlib import Path
     environment = {"sampled_at": time.time(), "system": platform.system(), "kernel": platform.release(),
                    "machine": platform.machine(), "context_tokens": None, "model_size_bytes": None}
@@ -147,7 +153,7 @@ def snapshot(management, specification):
                                    model_size_source="Ollama installed artifact")
         else:
             data = (inventory(management.dwarfstar_url) if backend == "dwarfstar" else
-                    overview.strata(management.strata_url))
+                    maya_inventory(management.maya_url) if backend == "maya" else overview.strata(management.strata_url))
             environment.update(context_tokens=data.get("max_context"), reported_model=data.get("model"),
                                engine_version=data.get("version"))
         environment["memory_after_sample"] = overview.memory()
