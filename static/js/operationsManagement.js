@@ -97,7 +97,7 @@ function renderResidency(data) {
   dwarfstarAliases = dwarfstar.aliases || [];
   const dwarfstarLive = el('operations-dwarfstar-live');
   dwarfstarLive.replaceChildren(node('p', dwarfstar.status === 'ok' ? 'Model loaded; server ready' :
-    dwarfstar.status === 'disabled' ? 'Not configured' : 'Residency unknown — server stopped, starting or unreachable', 'operations-residency-state'));
+    dwarfstar.status === 'stopped' ? 'Service stopped' : dwarfstar.status === 'disabled' ? 'Not configured' : 'Residency unknown — server stopped, starting or unreachable', 'operations-residency-state'));
   if (dwarfstar.status === 'ok') {
     facts(dwarfstarLive, [['Reported model', dwarfstar.model], ['Runtime context', tokens(dwarfstar.max_context)],
       ['Accepted request names', dwarfstarAliases.join(', ')], ['Runtime allocation', 'Not reported']]);

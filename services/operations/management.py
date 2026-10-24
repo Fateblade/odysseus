@@ -61,7 +61,7 @@ class Management:
         with ThreadPoolExecutor(max_workers=4) as executor:
             strata_result = executor.submit(strata, self.strata_url)
             ollama_result = executor.submit(ollama, self.ollama_url)
-            dwarfstar_result = executor.submit(inventory, self.dwarfstar_url)
+            dwarfstar_result = executor.submit(inventory, self.dwarfstar_url, self)
             maya_result = executor.submit(maya_inventory, self.maya_url)
             return {"configured": True, "strata": strata_result.result(),
                     "ollama": ollama_result.result(), "dwarfstar": dwarfstar_result.result(), "maya": maya_result.result(), "sampled_at": time.time()}

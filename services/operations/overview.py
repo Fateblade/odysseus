@@ -105,9 +105,29 @@ def storage():
         if not items:
             raise ValueError()
         return {"status": "ok" if result.returncode == 0 else "degraded", "items": items,
+                "totals": storage_totals(items),
                 "message": "Local disk filesystems only. Available space excludes filesystem-reserved blocks."}
     except (OSError, ValueError, subprocess.TimeoutExpired):
         return {"status": "unavailable", "items": [], "message": "Disk space could not be sampled on the host."}
+
+
+
+def storage_totals(items):
+    unique = {}
+    for row in items:
+        unique.setdefault(os.path.realpath(row["source"]), row)
+    return {key: sum(row[key] for row in unique.values())
+            for key in ("total_bytes", "used_bytes", "available_bytes")}
+
+
+def resources(physical_memory_gib=0):
+    from src.host_docker_access import running_in_container
+    if platform.system() != "Linux" or running_in_container():
+        return {"configured": False, "message": "Connect the helper on the Linux host to read resource usage."}
+    with ThreadPoolExecutor(max_workers=2) as executor:
+        host = executor.submit(host_metrics, physical_memory_gib)
+        disks = executor.submit(storage)
+        return {"configured": True, "sampled_at": time.time(), "host": host.result(), "storage": disks.result()}
 
 
 def host_metrics(physical_memory_gib=0):
@@ -208,7 +228,7 @@ def litellm(base_url):
         return {"status": "unavailable", "message": "LiteLLM is not responding to its liveness probe."}
 
 
-def collect(base_url, strata_url, ollama_url, physical_memory_gib=0, config_path="", container="litellm", dwarfstar_url="", maya_url=""):
+def collect(base_url, strata_url, ollama_url, physical_memory_gib=0, config_path="", container="litellm", dwarfstar_url="", maya_url="", management=None):
     from services.operations.activity import processes, gateway_activity, associate_containers
     from services.operations.dwarfstar import inventory
     from services.operations.maya import inventory as maya_inventory
@@ -217,7 +237,7 @@ def collect(base_url, strata_url, ollama_url, physical_memory_gib=0, config_path
         return {"configured": False, "message": "Connect the helper on the Linux host. Container and Windows readings are not substituted for host telemetry."}
     jobs = {"host": lambda: host_metrics(physical_memory_gib), "containers": containers,
             "strata": lambda: strata(strata_url), "ollama": lambda: ollama(ollama_url),
-            "dwarfstar": lambda: inventory(dwarfstar_url), "maya": lambda: maya_inventory(maya_url),
+            "dwarfstar": lambda: inventory(dwarfstar_url, management), "maya": lambda: maya_inventory(maya_url),
             "litellm": lambda: litellm(base_url), "processes": processes,
             "gateway_activity": lambda: gateway_activity(base_url, config_path, container), "storage": storage}
     result = {"configured": True, "sampled_at": time.time()}

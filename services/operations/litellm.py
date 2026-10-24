@@ -29,7 +29,7 @@ class HostOperations:
         self.management_path = env.get("ODYSSEUS_OPERATIONS_MANAGEMENT_CONFIG", "")
 
     async def run(self, action, values=None):
-        if action not in ("snapshot", "preview", "probe", "apply", "overview") and not self.remote and not self.helper:
+        if action not in ("snapshot", "preview", "probe", "apply", "overview", "resources") and not self.remote and not self.helper:
             from src.host_docker_access import running_in_container
             if sys.platform != "linux" or running_in_container():
                 if action in ("management", "residency", "jobs", "strata_config", "dwarfstar_config", "maya_config", "audit"):
@@ -39,7 +39,7 @@ class HostOperations:
             if action == "snapshot":
                 return {"configured": False, "message": "Host access is not configured. Connect the Operations host helper to read the host and manage LiteLLM."}
             raise OperationsError("LiteLLM host access is not configured.", 503)
-        if action == "overview" and not self.remote and not self.helper:
+        if action in ("overview", "resources") and not self.remote and not self.helper:
             from src.host_docker_access import running_in_container
             if sys.platform != "linux" or running_in_container():
                 return {"configured": False, "message": "Connect the helper on the Linux host to read its overview."}

@@ -1,3 +1,4 @@
+import { updateResources, markResourcesStale } from './operationsResources.js?v=20261024resources1';
 const el = id => document.getElementById(id);
 let timer = null;
 let active = false;
@@ -246,7 +247,7 @@ function render(data) {
   ollamaCard.append(node('p', ollama.installed_available ? `${ollama.installed.length} installed models` : ollama.message || 'Installed models unavailable', 'operations-muted'), action('Manage models', 'management'));
   services.append(ollamaCard);
   const dwarfstar = data.dwarfstar || {};
-  const dwarfstarCard = service('DwarfStar', dwarfstar.status === 'ok' ? 'Ready' : dwarfstar.configured ? 'Unavailable' : 'Not configured',
+  const dwarfstarCard = service('DwarfStar', dwarfstar.status === 'ok' ? 'Ready' : dwarfstar.status === 'stopped' ? 'Stopped' : dwarfstar.configured ? 'Unavailable' : 'Not configured',
     dwarfstar.status, dwarfstar.model || dwarfstar.message || 'Optional DeepSeek V4 Flash backend');
   if (dwarfstar.status === 'ok') dwarfstarCard.append(facts([['Context tokens', dwarfstar.max_context]]));
   dwarfstarCard.append(node('p', 'The server holds one startup-selected model. Unload competing large models before starting it.', 'operations-muted'), action('Manage DwarfStar', 'management'));
@@ -296,6 +297,7 @@ async function refresh() {
     const data = await response.json();
     if (!response.ok) throw new Error(data.detail || 'Host overview could not be read.');
     if (!data.configured) {
+      markResourcesStale();
       status.textContent = data.message;
       status.classList.remove('operations-error');
       el('operations-overview-content').hidden = true;
@@ -304,9 +306,10 @@ async function refresh() {
       return;
     }
     render(data);
+    updateResources(data);
     el('operations-overview-content').hidden = false;
     const unavailable = ['host', 'containers', 'strata', 'ollama', 'litellm', 'processes', 'storage'].filter(key => data[key]?.status !== 'ok');
-    if (data.dwarfstar?.configured && data.dwarfstar.status !== 'ok') unavailable.push('dwarfstar');
+    if (data.dwarfstar?.configured && !['ok', 'stopped'].includes(data.dwarfstar.status)) unavailable.push('dwarfstar');
     const time = new Date(data.sampled_at * 1000).toLocaleTimeString();
     status.textContent = `${data.demo ? 'Preview data · ' : ''}Updated ${time}${unavailable.length ? ` · unavailable or incomplete: ${unavailable.join(', ')}` : ''}`;
     status.classList.toggle('operations-error', unavailable.length > 0);
@@ -314,6 +317,7 @@ async function refresh() {
     connection.textContent = data.demo ? 'Preview data' : unavailable.length ? 'Partial readings' : 'Host connected';
     connection.dataset.state = data.demo ? 'demo' : unavailable.length ? 'partial' : 'online';
   } catch (error) {
+    markResourcesStale();
     status.textContent = `${error.message} Previous readings, if shown, are stale.`;
     status.classList.add('operations-error');
     el('operations-connection').textContent = 'Readings stale';

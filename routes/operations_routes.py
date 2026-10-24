@@ -41,7 +41,7 @@ def setup_operations_routes(service=None):
                                 "client_ip": request.client.host if request.client else None,
                                 "user_agent": request.headers.get("user-agent", "")[:512], "request_id": uuid.uuid4().hex}
             result = await operations.run(action, values)
-            if action in ("audit", "audit_detail"):
+            if action in ("audit", "audit_detail", "resources"):
                 return JSONResponse(result, headers={"Cache-Control": "no-store"})
             return result
         except OperationsError as error:
@@ -50,6 +50,10 @@ def setup_operations_routes(service=None):
     @router.get("/overview")
     async def get_host_overview(request: Request):
         return await invoke(request, "overview")
+
+    @router.get("/resources")
+    async def get_resources(request: Request):
+        return await invoke(request, "resources")
 
     @router.get("/litellm")
     async def get_configuration(request: Request):

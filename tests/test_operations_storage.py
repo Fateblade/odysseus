@@ -27,3 +27,43 @@ def test_disk_space_failure_is_not_reported_as_empty_disks(monkeypatch):
     result = storage()
     assert result["status"] == "unavailable"
     assert result["items"] == []
+
+
+
+def test_storage_totals_count_repeated_filesystem_sources_once():
+    from services.operations.overview import storage_totals
+    rows = [{"source": "/dev/nvme0n1p2", "total_bytes": 100, "used_bytes": 60, "available_bytes": 35},
+            {"source": "/dev/nvme0n1p2", "total_bytes": 100, "used_bytes": 60, "available_bytes": 35},
+            {"source": "/dev/nvme1n1p1", "total_bytes": 200, "used_bytes": 100, "available_bytes": 90}]
+    assert storage_totals(rows) == {"total_bytes": 300, "used_bytes": 160, "available_bytes": 125}
+
+
+def test_resource_sample_reads_only_host_and_storage(monkeypatch):
+    from services.operations import overview
+    calls = []
+    import src.host_docker_access
+    monkeypatch.setattr(overview.platform, "system", lambda: "Linux")
+    monkeypatch.setattr(src.host_docker_access, "running_in_container", lambda: False)
+    monkeypatch.setattr(overview, "host_metrics", lambda capacity: (calls.append(("host", capacity)), {"status": "ok"})[1])
+    monkeypatch.setattr(overview, "storage", lambda: (calls.append(("storage",)), {"status": "ok"})[1])
+    def unexpected(*args, **kwargs):
+        raise AssertionError("Resource sampling must not query inference services or processes")
+    monkeypatch.setattr(overview, "containers", unexpected)
+    monkeypatch.setattr(overview, "strata", unexpected)
+    monkeypatch.setattr(overview, "ollama", unexpected)
+    result = overview.resources(128)
+    assert result["configured"] is True and result["sampled_at"] > 0
+    assert result["host"]["status"] == "ok" and result["storage"]["status"] == "ok"
+    assert sorted(calls) == [("host", 128), ("storage",)]
+
+
+
+def test_resource_sample_does_not_substitute_container_disks(monkeypatch):
+    from services.operations import overview
+    import src.host_docker_access
+    monkeypatch.setattr(overview.platform, "system", lambda: "Linux")
+    monkeypatch.setattr(src.host_docker_access, "running_in_container", lambda: True)
+    def unexpected():
+        raise AssertionError("Do not sample container disks as host disks")
+    monkeypatch.setattr(overview, "storage", unexpected)
+    assert overview.resources()["configured"] is False

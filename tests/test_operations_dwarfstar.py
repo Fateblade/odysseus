@@ -164,3 +164,30 @@ def test_monitoring_configuration_does_not_grant_service_control():
     assert "dwarfstar" not in catalog["services"]
     with pytest.raises(OperationsError, match="Configure an explicit systemd unit"):
         management.execute({"target": "service", "name": "dwarfstar", "operation": "start"})
+
+
+
+@pytest.mark.parametrize("state,code,expected", [("inactive", 3, "stopped"), ("failed", 3, "unavailable"),
+                                                 ("active", 0, "unavailable"), ("unknown", 4, "unavailable")])
+def test_offline_inventory_uses_confirmed_service_state(monkeypatch, state, code, expected):
+    from types import SimpleNamespace
+    def offline(url):
+        raise OSError("Connection refused")
+    monkeypatch.setattr(dwarfstar, "get_json", offline)
+    calls = []
+    def service(name, operation, check):
+        calls.append((name, operation, check))
+        return SimpleNamespace(returncode=code, stdout=state.encode())
+    result = dwarfstar.inventory("http://native", SimpleNamespace(service=service))
+    assert result["status"] == expected
+    assert calls == [("dwarfstar", "is-active", False)]
+    if expected == "stopped":
+        assert result["loaded"] is False
+
+
+def test_offline_inventory_keeps_warning_when_service_state_cannot_be_read(monkeypatch):
+    from types import SimpleNamespace
+    monkeypatch.setattr(dwarfstar, "get_json", lambda url: {})
+    def denied(*args, **kwargs):
+        raise OSError("No systemd access")
+    assert dwarfstar.inventory("http://native", SimpleNamespace(service=denied))["status"] == "unavailable"

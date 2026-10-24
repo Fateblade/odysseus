@@ -54,9 +54,12 @@ def dispatch_request(args, management, payload):
         if payload["action"] == "audit_detail" and (not isinstance(event_id, str) or not re.fullmatch(r"[a-f0-9]{32}", event_id)):
             raise OperationsError("Invalid audit entry identifier.")
         return {"configured": True, **read(directory(management), event_id=event_id)}
+    if payload.get("action") == "resources":
+        from services.operations.overview import resources
+        return resources(args.physical_memory_gib)
     if payload.get("action") == "overview":
         from services.operations.overview import collect
-        result = collect(args.base_url, args.strata_url, args.ollama_url, args.physical_memory_gib, args.config, args.container, args.dwarfstar_url, args.maya_url)
+        result = collect(args.base_url, args.strata_url, args.ollama_url, args.physical_memory_gib, args.config, args.container, args.dwarfstar_url, args.maya_url, management=management)
     elif payload.get("action") in ("management", "residency", "manage", "jobs", "measurements", "measurement_import", "job_detail", "job_start", "job_cancel", "script_save", "strata_config", "strata_preview", "strata_apply", "dwarfstar_config", "dwarfstar_preview", "dwarfstar_apply", "maya_config", "maya_preview", "maya_apply"):
         if payload["action"].startswith("maya_"):
             from services.operations.maya_config import snapshot, review, enqueue_apply

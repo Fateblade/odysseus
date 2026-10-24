@@ -27,7 +27,7 @@
   <link rel="stylesheet" href="/static/css/documents-gallery-editor.css?v=20260929csssplit">
   <link rel="stylesheet" href="/static/css/email-calendar-notes-tasks.css?v=20260929csssplit">
   <link rel="stylesheet" href="/static/css/cookbook-research-memory-settings.css?v=20260929csssplit">
-  <link rel="stylesheet" href="/static/css/operations.css?v=20261024mayasettings1">
+  <link rel="stylesheet" href="/static/css/operations.css?v=20261024resources1">
 </head>
 <body class="operations-page">
   <a class="operations-skip" href="#operations-workspace">Skip to content</a>
@@ -54,6 +54,9 @@
       <div class="cookbook-actions">
         <span id="operations-connection" class="operations-connection" data-state="pending">Waiting for host</span>
         <button class="cookbook-btn" id="operations-refresh" type="button">Reload configuration</button>
+      </div>
+      <div id="operations-resources" class="operations-resources" role="group" aria-label="Host resource usage" hidden>
+        <dl id="operations-resource-values"></dl><span id="operations-resource-status" class="operations-resource-status">Waiting for host</span>
       </div>
     </header>
     <div class="operations-workspace" id="operations-workspace" tabindex="-1" role="region" aria-labelledby="operations-page-title">
@@ -136,6 +139,6 @@
     </div>
     </div>
   </main>
-  <script type="module" src="/static/js/operations.js?v=20261024mayasettings1"></script>
+  <script type="module" src="/static/js/operations.js?v=20261024resources1"></script>
 </body>
 </html>
