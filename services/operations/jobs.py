@@ -108,6 +108,9 @@ def enqueue(management, specification):
 
 
 def execute(management, payload):
+    if payload["action"] in ("measurements", "measurement_import"):
+        from services.operations.scoreboard import execute as measurements
+        return measurements(management, payload)
     directory = root(management)
     definitions = directory / "scripts.json"
     action = payload["action"]
@@ -165,6 +168,12 @@ def execute(management, payload):
             runs, tokens = payload.get("runs", 3), payload.get("max_tokens", 256)
             if type(runs) != int or not 1 <= runs <= 20 or type(tokens) != int or not 1 <= tokens <= 8192:
                 raise OperationsError("Use 1–20 runs and 1–8192 output tokens.")
+            from services.operations.scoreboard import declared_settings
+            declared = declared_settings(payload)
+            notes = payload.get("notes", "")
+            if not isinstance(notes, str) or len(notes) > 2000:
+                raise OperationsError("Notes must be at most 2000 characters.")
             return enqueue(management, {"kind": "benchmark", "backend": backend, "model": model_name(payload.get("model")),
-                                       "prompt": prompt, "runs": runs, "max_tokens": tokens, "warmup": bool(payload.get("warmup", True)), "timeout": 7200})
+                                       "prompt": prompt, "runs": runs, "max_tokens": tokens, "warmup": bool(payload.get("warmup", True)),
+                                       "declared": declared, "notes": notes, "timeout": 7200})
     raise OperationsError("Unknown job operation.")

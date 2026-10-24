@@ -1,3 +1,4 @@
+import { initializeScoreboard, refreshScoreboard } from './operationsScoreboard.js?v=20261023scoreboard1';
 const el = id => document.getElementById(id);
 let active = null;
 let timer = null;
@@ -410,10 +411,16 @@ function initialize() {
   const tokens = field(grid, 'operations-benchmark-tokens', 'Maximum output tokens', 256, null, 'number');
   tokens.min = '1'; tokens.max = '8192';
   field(grid, 'operations-benchmark-warmup', 'Warmup', 'yes', ['yes', 'no']);
+  field(grid, 'operations-benchmark-size', 'Model artifacts GiB (optional)', '', null, 'number').step = 'any';
+  field(grid, 'operations-benchmark-quant', 'Quantization (optional)');
+  field(grid, 'operations-benchmark-version', 'Engine version / revision (optional)');
+  field(grid, 'operations-benchmark-notes', 'Notes / test label', '', null, 'textarea');
   field(grid, 'operations-benchmark-prompt', 'Prompt', 'Explain how shared memory works in an integrated GPU system.', null, 'textarea');
   benchmark.append(button('Run benchmark', () => task(async () => {
     const body = { kind: 'benchmark', backend: el('operations-benchmark-backend').value,
       model: el('operations-benchmark-model').value, prompt: el('operations-benchmark-prompt').value,
+      model_size_bytes: el('operations-benchmark-size').value ? Math.round(Number(el('operations-benchmark-size').value) * 1024 ** 3) : null,
+      quantization: el('operations-benchmark-quant').value, engine_version: el('operations-benchmark-version').value, notes: el('operations-benchmark-notes').value,
       runs: Number(runs.value), max_tokens: Number(tokens.value), warmup: el('operations-benchmark-warmup').value === 'yes' };
     if (!await confirmOperation(`Run ${body.runs} measured generations on ${body.backend}/${body.model}${body.warmup ? ' plus one warmup' : ''}? This shares the running inference service with other requests.`)) return;
     const result = await request('jobs/start', body);
@@ -421,6 +428,7 @@ function initialize() {
     await refreshJobs();
     status('Benchmark started.');
   })));
+  initializeScoreboard(jobsContent, { section, field, button, request, task, inspect: async id => { selectedJob = id; await refreshDetail(); el('operations-job-output').scrollIntoView({ block: 'nearest' }); } });
   const scripts = section(jobsContent, 'Python scripts', 'Save a definition for a script in your host scripts folder, then run it with its saved arguments and timeout.', 'operations-scripts');
   scripts.id = 'operations-scripts-card';
   const scriptGrid = node('div', '', 'operations-grid');
@@ -608,6 +616,7 @@ async function refreshJobs() {
   }
   table.append(body); el('operations-job-list').replaceChildren(table);
   await refreshDetail();
+  await refreshScoreboard();
   status(result.demo ? 'Preview data — jobs and results are simulated.' : `${result.jobs?.length || 0} recent jobs. Logs refresh while this tab is visible.`);
 }
 

@@ -1,7 +1,8 @@
 """Streaming TPS measurements with backend token counts, never chunk estimates."""
 
+import hashlib
 import json
-import statistics
+import platform
 import time
 from urllib.request import Request, build_opener
 
@@ -109,16 +110,54 @@ def run(management, specification):
     if specification["warmup"]:
         print("Warmup (excluded from measured samples)", flush=True)
         warmup = sample(management, specification)
+    environment = None
     samples = []
     for index in range(specification["runs"]):
         result = sample(management, specification)
         samples.append(result)
+        if environment is None:
+            environment = snapshot(management, specification)
         print(json.dumps({"run": index + 1, **result}), flush=True)
-    summary = {}
-    for key in ("ttft_s", "decode_tps", "prefill_tps", "end_to_end_tps"):
-        values = [r[key] for r in samples if r.get(key) is not None]
-        summary[key] = statistics.median(values) if values else None
+    from services.operations.scoreboard import summarize
+    summary = summarize(samples)
     return {"backend": specification["backend"], "model": specification["model"], "summary": summary,
             "samples": samples, "warmup": warmup, "temperature": 0, "seed": 42,
+            "environment": environment, "prompt_sha256": hashlib.sha256(specification["prompt"].encode()).hexdigest(),
             "thinking": False if specification["backend"] == "dwarfstar" else "backend default",
             "note": "Warmup does not clear caches. End-to-end TPS includes load, queue and prefill; unavailable timings stay null."}
+
+
+def snapshot(management, specification):
+    """Read settings outside the timed request; missing metadata never fails a run."""
+    from services.operations import overview
+    from services.operations.dwarfstar import inventory
+    from pathlib import Path
+    environment = {"sampled_at": time.time(), "system": platform.system(), "kernel": platform.release(),
+                   "machine": platform.machine(), "context_tokens": None, "model_size_bytes": None}
+    backend = specification["backend"]
+    try:
+        if backend == "ollama":
+            data = overview.ollama(management.ollama_url)
+            matches = [row for row in data.get("loaded", []) if row["name"] == specification["model"]]
+            installed = [row for row in data.get("installed", []) if row["name"] == specification["model"]]
+            if matches:
+                environment.update(context_tokens=matches[0].get("context_length"), runtime_bytes=matches[0].get("size_bytes"))
+            if installed:
+                environment.update(model_size_bytes=installed[0].get("size_bytes"), model_digest=installed[0].get("digest"),
+                                   model_size_source="Ollama installed artifact")
+        else:
+            data = (inventory(management.dwarfstar_url) if backend == "dwarfstar" else
+                    overview.strata(management.strata_url))
+            environment.update(context_tokens=data.get("max_context"), reported_model=data.get("model"),
+                               engine_version=data.get("version"))
+        environment["memory_after_sample"] = overview.memory()
+        cpu_info = Path("/proc/cpuinfo").read_text(encoding="utf-8")
+        environment["cpu"] = next((line.split(":", 1)[1].strip() for line in cpu_info.splitlines()
+                                   if line.startswith("model name")), None)
+    except Exception:
+        environment["metadata_note"] = "Some runtime metadata could not be read."
+    declared = specification.get("declared", {})
+    environment["declared"] = declared
+    if environment["model_size_bytes"] is None and declared.get("model_size_bytes"):
+        environment.update(model_size_bytes=declared["model_size_bytes"], model_size_source="user supplied artifact size")
+    return environment

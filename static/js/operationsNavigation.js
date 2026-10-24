@@ -13,7 +13,7 @@ const sections = {
     ['configuration', 'Strata configuration', '.operations-strata-configuration'], ['models', 'Ollama models', '.operations-ollama-control'],
     ['output', 'Logs & details', '.operations-command-output'],
   ],
-  jobs: [['benchmark', 'TPS benchmark', '.operations-benchmark'], ['scripts', 'Python scripts', '.operations-scripts'],
+  jobs: [['benchmark', 'TPS benchmark', '.operations-benchmark'], ['scoreboard', 'Model scoreboard', '.operations-scoreboard'], ['scripts', 'Python scripts', '.operations-scripts'],
     ['history', 'Jobs & comparison', '.operations-history'], ['detail', 'Job details', '.operations-job-detail']],
 };
 

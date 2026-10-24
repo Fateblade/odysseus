@@ -79,6 +79,14 @@ def setup_operations_routes(service=None):
     async def get_jobs(request: Request):
         return await invoke(request, "jobs")
 
+    @router.post("/measurements")
+    async def get_measurements(request: Request):
+        return await invoke(request, "measurements")
+
+    @router.post("/measurements/import")
+    async def import_measurements(request: Request):
+        return await invoke(request, "measurement_import")
+
     @router.post("/jobs/detail")
     async def get_job(request: Request):
         return await invoke(request, "job_detail")

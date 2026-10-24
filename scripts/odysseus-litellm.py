@@ -56,7 +56,7 @@ def dispatch_request(args, management, payload):
     if payload.get("action") == "overview":
         from services.operations.overview import collect
         result = collect(args.base_url, args.strata_url, args.ollama_url, args.physical_memory_gib, args.config, args.container, args.dwarfstar_url)
-    elif payload.get("action") in ("management", "residency", "manage", "jobs", "job_detail", "job_start", "job_cancel", "script_save", "strata_config", "strata_preview", "strata_apply", "dwarfstar_config", "dwarfstar_preview", "dwarfstar_apply"):
+    elif payload.get("action") in ("management", "residency", "manage", "jobs", "measurements", "measurement_import", "job_detail", "job_start", "job_cancel", "script_save", "strata_config", "strata_preview", "strata_apply", "dwarfstar_config", "dwarfstar_preview", "dwarfstar_apply"):
         if payload["action"].startswith("dwarfstar_"):
             from services.operations.dwarfstar_config import snapshot, review, enqueue_apply
             operation = {"dwarfstar_config": snapshot, "dwarfstar_preview": review, "dwarfstar_apply": enqueue_apply}[payload["action"]]
