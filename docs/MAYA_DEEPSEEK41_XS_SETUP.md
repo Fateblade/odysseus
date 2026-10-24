@@ -2,7 +2,7 @@
 
 Updated 2026-10-24 for the Ubuntu Ryzen AI Max+ 395 / Radeon 8060S (`gfx1151`), 128 GB class host. Odysseus branch: `feature/linux-ai-operations-maya-xs`, based on DwarfStar commit `dafdb8f2`, including its measurement scoreboard. Fetch this branch on Ubuntu before running its helper scripts; the Windows checkout does not update the server automatically.
 
-This is an isolated experiment alongside the working V4 Flash 0731 Q2 control. The user reports a successful host build with Ubuntu HIP 7.1 and clang 21 after the three layout/header corrections below. Model files subsequently verified and inference ran, but the first measurements used unoptimized HIP kernels: CMAKE_HIP_FLAGS_RELEASE was empty. Apply the explicit HIP Release optimization below and remeasure before judging performance. Do not replace the working ROCm, Strata, Ollama or DwarfStar installations to make the experiment fit.
+This is an isolated experiment alongside the working V4 Flash 0731 Q2 control. The user reports a successful host build with Ubuntu HIP 7.1 and clang 21 after the three layout/header corrections below. Model files subsequently verified and inference ran, but the first measurements used unoptimized HIP kernels: CMAKE_HIP_FLAGS_RELEASE was empty. The corrected HIP Release build subsequently reached 17.2 native decode tokens/s in a short probe (1.599 seconds total for 16 output tokens); apply the explicit optimization below before further measurements. Do not replace the working ROCm, Strata, Ollama or DwarfStar installations to make the experiment fit.
 
 ## Verified pins and capacity
 
@@ -162,7 +162,7 @@ The bitcode path above was found on this host in Ubuntu package `rocm-device-lib
 
 ### Verify HIP Release optimization before measuring
 
-Confirmed from the first slow deployment: `CMAKE_BUILD_TYPE=Release` and C++ compilation used `-O3`, but `CMAKE_HIP_FLAGS_RELEASE` was empty and actual `HIP_FLAGS` contained no optimization option. Those GPU kernels were compiled with clang's default optimization level rather than an optimized Release configuration. Three 256-token runs spent approximately 1183 seconds in native decode, with about 99.8% expert-cache hits. This establishes a build misconfiguration and invalidates those runs as an optimized performance baseline. The speed after correction is not yet measured.
+Confirmed from the first slow deployment: `CMAKE_BUILD_TYPE=Release` and C++ compilation used `-O3`, but `CMAKE_HIP_FLAGS_RELEASE` was empty and actual `HIP_FLAGS` contained no optimization option. Those GPU kernels were compiled with clang's default optimization level rather than an optimized Release configuration. Three 256-token runs spent approximately 1183 seconds in native decode, with about 99.8% expert-cache hits. This establishes a build misconfiguration and invalidates those runs as an optimized performance baseline. The subsequent optimized 16-token smoke test measured 17.2 native decode tokens/s and 1.599 seconds total; repeated matched benchmarks and agent quality still need validation.
 
 Set the language-specific Release flags explicitly. Existing builds keep their bitcode/header search flags in `CMAKE_HIP_FLAGS`; the following command adds configuration flags without replacing them:
 
@@ -182,6 +182,13 @@ Both targets must show `-O3` in `HIP_FLAGS`. Inspect actual generated flags, not
 Finish host jobs and requests, stop an existing running `maya-xs.service`, and keep a copy of `build-hip/maya-ds4` before rebuilding. Then run `.venv/bin/cmake --build build-hip --target maya-ds4 -j 2`. Changed compiler flags cause affected HIP objects to rebuild; no model download or cache deletion is required. Restart the service only if it was previously running, verify readiness, and begin with one short 16-token request with thinking disabled. Record native decode timings, output correctness and the new startup expert-calibration timings before a full benchmark. Preserve the original binary for rollback and keep speculation off while isolating this change.
 
 References: [Clang optimization options](https://clang.llvm.org/docs/CommandGuide/clang.html#code-generation-options), [CMake language configuration flags](https://cmake.org/cmake/help/latest/variable/CMAKE_LANG_FLAGS_CONFIG.html).
+
+
+### Optimized smoke test result
+
+After rebuilding with explicit HIP `-O3 -DNDEBUG`, the user supplied a successful HTTP 200 response for `Count from 1 to 8.` with 12 uncached prompt tokens, 16 output tokens, thinking disabled and no speculative drafts. Native prefill took 665.4 ms; native decode took 929.2 ms (17.2 tokens/s); client total time was 1.599148 seconds (about 10.0 end-to-end tokens/s). The output was the correct count prefix through 6 and stopped at the intentional token cap (`finish_reason=length`).
+
+Latest startup calibration changed GPU expert cost from 8.942 ms in the prior build to 0.025 ms, and enabled some CPU-lane expert streaming on 40 layers. The initial 20-minute runs used unoptimized HIP kernels and are unsuitable as a hardware capability conclusion. The approximately 80-fold difference in reported native decode rates is between different short/long probes, not a matched throughput comparison. Preserve [the smoke result](benchmarks/maya-deepseek41-xs-optimized-smoke.json), then repeat the original three-run 256-token benchmark with identical prompt, context, sampling and no-drafter settings. Keep longer prompt depths, sustained memory headroom and tool correctness as separate acceptance checks.
 
 ## 4. Build and download the explicitly selected XS profile
 

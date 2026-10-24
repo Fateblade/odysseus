@@ -1,0 +1,57 @@
+{
+  "kind": "optimized_smoke_test",
+  "reported_date": "2026-10-24",
+  "source": "user-supplied native API response and startup calibration",
+  "backend": "maya",
+  "model": "deepseek-v4.1-flash",
+  "quantization": "Maya-XS IQ1_S",
+  "maya_version": "1.1.22",
+  "context_tokens": 4096,
+  "hardware": "Ryzen AI Max+ 395 / Radeon 8060S gfx1151",
+  "hip_version": "7.1",
+  "compiler": "Ubuntu clang 21.1.8",
+  "build_change": {
+    "CMAKE_HIP_FLAGS_RELEASE": "-O3 -DNDEBUG"
+  },
+  "request": {
+    "prompt": "Count from 1 to 8.",
+    "max_tokens": 16,
+    "temperature": 0,
+    "reasoning_effort": "none",
+    "stream": false
+  },
+  "response": {
+    "content": "1, 2, 3, 4, 5, 6",
+    "finish_reason": "length"
+  },
+  "usage": {
+    "prompt_tokens": 12,
+    "completion_tokens": 16,
+    "cached_tokens": 0
+  },
+  "timings": {
+    "prompt_ms": 665.4,
+    "prompt_per_second": 18.0,
+    "predicted_ms": 929.2,
+    "predicted_per_second": 17.2,
+    "draft_n": 0,
+    "draft_n_accepted": 0
+  },
+  "http_status": 200,
+  "elapsed_s": 1.599148,
+  "end_to_end_tps": 10.005327837073242,
+  "expert_calibration_ms": {
+    "cpu": 0.128,
+    "streamed": 0.232,
+    "gpu": 0.025,
+    "disk": 5.97
+  },
+  "streaming_layers": 40,
+  "speculation": "disabled",
+  "limitations": [
+    "Single short probe; no matched repeated 256-token benchmark yet.",
+    "Different prompt and output length from the initial unoptimized runs.",
+    "Correct count prefix truncated by the intentional 16-token cap; not full agent/tool quality validation.",
+    "Reported startup calibration includes historical and latest log lines; latest selected here."
+  ]
+}
