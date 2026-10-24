@@ -2,7 +2,7 @@
 
 Updated 2026-10-24 for the Ubuntu Ryzen AI Max+ 395 / Radeon 8060S (`gfx1151`), 128 GB class host. Odysseus branch: `feature/linux-ai-operations-maya-xs`, based on DwarfStar commit `dafdb8f2`, including its measurement scoreboard. Fetch this branch on Ubuntu before running its helper scripts; the Windows checkout does not update the server automatically.
 
-This is an isolated experiment alongside the working V4 Flash 0731 Q2 control. The user reports a successful host build with Ubuntu HIP 7.1 and clang 21 after the three layout/header corrections below. Model-file verification, startup, real inference and GPU measurements remain to be completed. Do not replace the working ROCm, Strata, Ollama or DwarfStar installations to make the experiment fit.
+This is an isolated experiment alongside the working V4 Flash 0731 Q2 control. The user reports a successful host build with Ubuntu HIP 7.1 and clang 21 after the three layout/header corrections below. Model files subsequently verified and inference ran, but the first measurements used unoptimized HIP kernels: CMAKE_HIP_FLAGS_RELEASE was empty. Apply the explicit HIP Release optimization below and remeasure before judging performance. Do not replace the working ROCm, Strata, Ollama or DwarfStar installations to make the experiment fit.
 
 ## Verified pins and capacity
 
@@ -101,7 +101,7 @@ cd "$HOME/project-maya-xs"
 ROCM_PATH=/usr ./maya.sh --backend hip --model DeepSeek-V4.1-Flash-1017 --ds4-quant maya-xs --gpu 0 --check
 ```
 
-The helper checks the installed paths and the pinned `maya.py` source hash before adding the two Ubuntu search locations. It saves `maya.py.before-ubuntu-layout`, refuses unrelated source edits, and permits a repeat invocation. Keep `ROCM_PATH=/usr` in this terminal for subsequent setup (`export ROCM_PATH=/usr`). Record this local source patch with the engine revision. Passing discovery does not establish that CMake, device libraries, GPU kernels or model inference work on this host; keep the first subsequent build error if one occurs.
+The helper checks the installed paths and the pinned `maya.py` source hash before adding the two Ubuntu search locations and explicit `-O3 -DNDEBUG` HIP Release flags. It saves `maya.py.before-ubuntu-layout`, refuses unrelated source edits, and permits a repeat invocation. Keep `ROCM_PATH=/usr` in this terminal for subsequent setup (`export ROCM_PATH=/usr`). Record this local source patch with the engine revision. Passing discovery does not establish that CMake, device libraries, GPU kernels or model inference work on this host; keep the first subsequent build error if one occurs.
 
 
 On-host result after this patch: HIP prerequisites pass with ROCm root `/usr`, gfx1151, HIP 7.1 and Ubuntu clang 21.1.8. The precheck reports roughly 30 GiB CPU-visible RAM, 25 GiB available, and a 96 GiB GPU pool. The RAM figures come from `/proc/meminfo`; this split is consistent with a large reserved GPU allocation and does not by itself establish missing physical memory. The generic APU message is not a complete description of the DeepSeek engine: `maya-ds4` also budgets GPU allocations from HIP memory queries and sizes its host tier separately. Do not assume the two reports are independent additional capacity, or conclude that all experts fit from either one. Build/download with `--no-start` can proceed; inspect actual allocation/tier logs and both memory pools before declaring residency. This discovery result alone does not prove residency; the later successful build is recorded below.
@@ -122,6 +122,7 @@ if test -n "$MAYA_DEVICE_LIB_FILE" && test -f "$MAYA_DEVICE_LIB_FILE"; then
   MAYA_DEVICE_LIB_DIR=$(dirname "$MAYA_DEVICE_LIB_FILE")
   printf 'Device bitcode: %s\n' "$MAYA_DEVICE_LIB_DIR"
   ROCM_PATH=/usr .venv/bin/cmake -S . -B build-hip \
+    -DCMAKE_HIP_FLAGS_RELEASE:STRING="-O3 -DNDEBUG" \
     -DCMAKE_HIP_FLAGS:STRING="--rocm-path=/usr --rocm-device-lib-path=$MAYA_DEVICE_LIB_DIR"
 else
   printf 'No installed rocm-device-libs-21/ocml.bc found. Inspect package inventory before installing anything.\n'
@@ -150,12 +151,37 @@ Observed after device-bitcode configuration: compilation reaches `glm_batch.cu`,
   cd "$HOME/project-maya-xs"
   export ROCM_PATH=/usr
   .venv/bin/cmake -S . -B build-hip \
+    -DCMAKE_HIP_FLAGS_RELEASE:STRING="-O3 -DNDEBUG" \
     -DCMAKE_HIP_FLAGS:STRING="--rocm-path=/usr --rocm-device-lib-path=/usr/lib/llvm-21/lib/clang/21/amdgcn/bitcode -I$HOME/rocwmma-7.1.0/library/include"
   .venv/bin/cmake --build build-hip --target maya-ds4 -j 1
 )
 ```
 
 The bitcode path above was found on this host in Ubuntu package `rocm-device-libs-21` version `7.1.1+dfsg-0ubuntu1`. The subshell stops on failed checkout/header/configuration checks. Reuse an existing clean matching rocWMMA checkout; do not replace an existing directory. No separate rocWMMA build or change under `/usr/include` is required. On successful engine build, rerun the full Maya setup command with `--no-start` to finish its pack/model/configuration stages. Keep the header checkout for subsequent builds. The user subsequently reported a successful engine build with these flags. GPU inference still requires on-host validation.
+
+
+### Verify HIP Release optimization before measuring
+
+Confirmed from the first slow deployment: `CMAKE_BUILD_TYPE=Release` and C++ compilation used `-O3`, but `CMAKE_HIP_FLAGS_RELEASE` was empty and actual `HIP_FLAGS` contained no optimization option. Those GPU kernels were compiled with clang's default optimization level rather than an optimized Release configuration. Three 256-token runs spent approximately 1183 seconds in native decode, with about 99.8% expert-cache hits. This establishes a build misconfiguration and invalidates those runs as an optimized performance baseline. The speed after correction is not yet measured.
+
+Set the language-specific Release flags explicitly. Existing builds keep their bitcode/header search flags in `CMAKE_HIP_FLAGS`; the following command adds configuration flags without replacing them:
+
+```bash
+cd "$HOME/project-maya-xs"
+export ROCM_PATH=/usr
+.venv/bin/cmake -S . -B build-hip \
+  -DCMAKE_BUILD_TYPE=Release \
+  -DCMAKE_HIP_FLAGS_RELEASE:STRING="-O3 -DNDEBUG"
+for target in maya-ds4 strata_kernels; do
+  grep -E '^HIP_FLAGS = .* -O3( |$)' "build-hip/CMakeFiles/$target.dir/flags.make"
+done
+```
+
+Both targets must show `-O3` in `HIP_FLAGS`. Inspect actual generated flags, not just the Release build-type label or CXX_FLAGS. Stop if either is missing optimization or a later conflicting optimization flag appears. The updated Ubuntu helper also passes these flags during future setup builds, but applying it to an already stamped build alone does not guarantee recompilation: explicitly configure and rebuild the current cache.
+
+Finish host jobs and requests, stop an existing running `maya-xs.service`, and keep a copy of `build-hip/maya-ds4` before rebuilding. Then run `.venv/bin/cmake --build build-hip --target maya-ds4 -j 2`. Changed compiler flags cause affected HIP objects to rebuild; no model download or cache deletion is required. Restart the service only if it was previously running, verify readiness, and begin with one short 16-token request with thinking disabled. Record native decode timings, output correctness and the new startup expert-calibration timings before a full benchmark. Preserve the original binary for rollback and keep speculation off while isolating this change.
+
+References: [Clang optimization options](https://clang.llvm.org/docs/CommandGuide/clang.html#code-generation-options), [CMake language configuration flags](https://cmake.org/cmake/help/latest/variable/CMAKE_LANG_FLAGS_CONFIG.html).
 
 ## 4. Build and download the explicitly selected XS profile
 

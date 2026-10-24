@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Adapt pinned Maya v1.1.22 detection to Ubuntu LLVM 21 and x86_64 hipBLAS."""
+"""Adapt pinned Maya v1.1.22 Ubuntu detection and explicitly optimize HIP Release builds."""
 
 import argparse
 import hashlib
@@ -13,6 +13,11 @@ REPLACEMENTS = (
      'root / "lib64" / "rocm" / "llvm" / "bin" / exe, root / "lib" / "llvm-21" / "bin" / exe, root / "bin" / exe)'),
     ('(root / d).glob("libhipblas.so*")) for d in ("lib", "lib64"))',
      '(root / d).glob("libhipblas.so*")) for d in ("lib", "lib64", "lib/x86_64-linux-gnu"))'),
+    ('conf += ["-S", str(ROOT), "-B", str(BUILD), "-DCMAKE_BUILD_TYPE=Release",\n'
+     '             "-DSTRATA_ENABLE_HIP=ON",',
+     'conf += ["-S", str(ROOT), "-B", str(BUILD), "-DCMAKE_BUILD_TYPE=Release",\n'
+     '             "-DCMAKE_HIP_FLAGS_RELEASE:STRING=-O3 -DNDEBUG",\n'
+     '             "-DSTRATA_ENABLE_HIP=ON",'),
 )
 
 
@@ -20,10 +25,10 @@ def patch_source(raw):
     source = raw.replace(b"\r\n", b"\n").decode("utf-8")
     original, patched = source, source
     for old, new in REPLACEMENTS:
-        if source.count(old) == 1 and new not in source:
-            patched = patched.replace(old, new)
-        elif source.count(new) == 1 and old not in source:
+        if source.count(new) == 1:
             original = original.replace(new, old)
+        elif source.count(old) == 1:
+            patched = patched.replace(old, new)
         else:
             raise ValueError("Unexpected Maya detection code; refusing to patch.")
     if hashlib.sha256(original.encode()).hexdigest() != SOURCE_SHA256:
@@ -47,11 +52,16 @@ def main():
     except ValueError as error:
         parser.error(str(error))
     if patched == raw.replace(b"\r\n", b"\n"):
-        print("Ubuntu layout patch already applied.")
+        print("Ubuntu layout and HIP Release optimization patch already applied.")
         return
     backup = path.with_name("maya.py.before-ubuntu-layout")
-    with backup.open("xb") as file:
-        file.write(raw)
+    if backup.exists():
+        saved = backup.read_bytes().replace(b"\r\n", b"\n")
+        if backup.is_symlink() or hashlib.sha256(saved).hexdigest() != SOURCE_SHA256:
+            parser.error("Existing backup differs from pinned original; preserve and inspect it first.")
+    else:
+        with backup.open("xb") as file:
+            file.write(raw)
     temporary = path.with_name("maya.py.ubuntu-layout.tmp")
     try:
         with temporary.open("xb") as file:
@@ -60,7 +70,8 @@ def main():
         os.replace(temporary, path)
     finally:
         temporary.unlink(missing_ok=True)
-    print(f"Patched Ubuntu detection only. Original saved at {backup}")
+    print(f"Patched Ubuntu detection and HIP Release optimization. Original saved at {backup}")
+    print('Existing builds also need CMake configuration with -DCMAKE_HIP_FLAGS_RELEASE:STRING="-O3 -DNDEBUG" and rebuilding.')
 
 
 if __name__ == "__main__":

@@ -3,6 +3,7 @@
 import ast
 import hashlib
 import importlib.util
+import sys
 from pathlib import Path
 
 import pytest
@@ -31,6 +32,12 @@ def hip_clang(root):
                  if p.exists()), None)
 def library_found(root):
     return any(list((root / d).glob("libhipblas.so*")) for d in ("lib", "lib64"))
+def configure():
+    ROOT = BUILD = Path(".")
+    conf = []
+    conf += ["-S", str(ROOT), "-B", str(BUILD), "-DCMAKE_BUILD_TYPE=Release",
+             "-DSTRATA_ENABLE_HIP=ON", "-DSTRATA_ENABLE_CUDA=OFF"]
+    return conf
 '''
     monkeypatch.setattr(module, "SOURCE_SHA256", hashlib.sha256(raw).hexdigest())
     patched = module.patch_source(raw)
@@ -45,5 +52,23 @@ def library_found(root):
     library.touch()
     assert namespace["hip_clang"](tmp_path) == compiler
     assert namespace["library_found"](tmp_path) is True
+    assert "-DCMAKE_HIP_FLAGS_RELEASE:STRING=-O3 -DNDEBUG" in namespace["configure"]()
+    earlier = raw
+    for old, new in module.REPLACEMENTS[:2]:
+        earlier = earlier.replace(old.encode(), new.encode())
+    assert module.patch_source(earlier) == patched
+    checkout = tmp_path / "maya"
+    checkout.mkdir()
+    target = checkout / "maya.py"
+    target.write_bytes(earlier)
+    backup = checkout / "maya.py.before-ubuntu-layout"
+    backup.write_bytes(raw)
+    actual_is_file = Path.is_file
+    monkeypatch.setattr(Path, "is_file", lambda self: True if self.as_posix().startswith('/usr/') else actual_is_file(self))
+    monkeypatch.setattr(sys, "argv", ["patch", str(checkout)])
+    module.main()
+    module.main()
+    assert target.read_bytes() == patched
+    assert backup.read_bytes() == raw
     with pytest.raises(ValueError, match="does not match pinned"):
         module.patch_source(raw + b"print('unrelated edit')\n")
