@@ -119,11 +119,12 @@ def execute(management, payload):
         jobs.sort(key=lambda j: j["created_at"], reverse=True)
         public = []
         for job in jobs[:100]:
-            item = {**job, "specification": {k: v for k, v in job["specification"].items() if k != "prompt"}}
+            item = {**job, "specification": {k: v for k, v in job["specification"].items() if k not in ("prompt", "tasks", "warmup_task")}}
             if "result" in item:
                 item["result"] = {"summary": item["result"].get("summary", {})} if isinstance(item["result"], dict) else {}
             public.append(item)
-        return {"jobs": public, "scripts": json.loads(definitions.read_text()) if definitions.exists() else [], "scripts_enabled": bool(management.settings.get("scripts_root"))}
+        from services.operations.benchmark_tasks import catalog
+        return {"benchmark": catalog(), "jobs": public, "scripts": json.loads(definitions.read_text()) if definitions.exists() else [], "scripts_enabled": bool(management.settings.get("scripts_root"))}
     if action == "job_detail":
         folder = job_directory(management, payload.get("id"))
         log_path = folder / "output.log"
@@ -164,18 +165,20 @@ def execute(management, payload):
                 raise OperationsError("Configure the DwarfStar endpoint on the host helper first.", 503)
             if backend == "maya" and not management.maya_url:
                 raise OperationsError("Configure the Maya endpoint on the host helper first.", 503)
-            prompt = payload.get("prompt", "")
-            if not isinstance(prompt, str) or not 1 <= len(prompt) <= 32768:
-                raise OperationsError("Supply a prompt of 1–32768 characters.")
+            from services.operations.benchmark_tasks import plan, MAX_RUNS, MAX_OUTPUT_TOKENS
             runs, tokens = payload.get("runs", 3), payload.get("max_tokens", 256)
-            if type(runs) != int or not 1 <= runs <= 20 or type(tokens) != int or not 1 <= tokens <= 8192:
-                raise OperationsError("Use 1–20 runs and 1–8192 output tokens.")
+            if type(runs) != int or not 1 <= runs <= MAX_RUNS or type(tokens) != int or not 1 <= tokens <= MAX_OUTPUT_TOKENS:
+                raise OperationsError(f"Use 1–{MAX_RUNS} runs and 1–{MAX_OUTPUT_TOKENS} output tokens.")
+            timeout = payload.get("timeout", 7200)
+            if type(timeout) is not int or not 60 <= timeout <= 604800:
+                raise OperationsError("Benchmark timeout must be 60–604800 seconds.")
+            workload = plan(payload, runs)
             from services.operations.scoreboard import declared_settings
             declared = declared_settings(payload)
             notes = payload.get("notes", "")
             if not isinstance(notes, str) or len(notes) > 2000:
                 raise OperationsError("Notes must be at most 2000 characters.")
             return enqueue(management, {"kind": "benchmark", "backend": backend, "model": model_name(payload.get("model")),
-                                       "prompt": prompt, "runs": runs, "max_tokens": tokens, "warmup": bool(payload.get("warmup", True)),
-                                       "declared": declared, "notes": notes, "timeout": 7200})
+                                       **workload, "runs": runs, "max_tokens": tokens, "warmup": bool(payload.get("warmup", True)),
+                                       "declared": declared, "notes": notes, "timeout": timeout})
     raise OperationsError("Unknown job operation.")

@@ -191,3 +191,27 @@ def test_offline_inventory_keeps_warning_when_service_state_cannot_be_read(monke
     def denied(*args, **kwargs):
         raise OSError("No systemd access")
     assert dwarfstar.inventory("http://native", SimpleNamespace(service=denied))["status"] == "unavailable"
+
+
+
+def test_worker_executes_saved_distinct_tasks_and_separate_warmup(api_server, tmp_path):
+    from services.operations.benchmark_tasks import plan
+    base, requests = api_server
+    specification = {"kind": "benchmark", "backend": "dwarfstar", "model": "deepseek-v4-flash",
+                     "runs": 2, "max_tokens": 262144, "warmup": True,
+                     **plan({"task_family": "research", "task_mode": "different", "task_seed": 123}, 2)}
+    (tmp_path / "job.json").write_text(json.dumps({"specification": specification}), encoding="utf-8")
+    process = subprocess.run([sys.executable, str(ROOT / "scripts/odysseus-operations-worker.py"),
+                              str(tmp_path), "", "http://127.0.0.1:1", "http://127.0.0.1:1",
+                              "--dwarfstar-url", base, "--execute"], capture_output=True, text=True, timeout=20)
+    assert process.returncode == 0, process.stdout + process.stderr
+    sent = [body for path, body in requests if path == "/v1/chat/completions"]
+    assert len(sent) == 3
+    assert len({body["messages"][0]["content"] for body in sent}) == 3
+    assert all(body["max_tokens"] == 262144 for body in sent)
+    result = json.loads((tmp_path / "result.json").read_text(encoding="utf-8"))
+    assert result["benchmark_version"] == 2
+    assert result["workload"]["task_seed"] == 123
+    assert len(result["samples"]) == 2
+    assert result["samples"][0]["task"]["id"] == specification["tasks"][0]["id"]
+    assert result["warmup"]["task"]["id"] == specification["warmup_task"]["id"]

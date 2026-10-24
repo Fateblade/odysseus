@@ -2,6 +2,18 @@
 
 Open Operations, Scripts & TPS tests, Model scoreboard. Completed benchmark jobs appear automatically, including older jobs beyond the recent 100-job list. New measurements persist in the configured host jobs_directory and survive dashboard rebuilds and restarts. Back up that directory; removing it removes the measurement history.
 
+## Run predefined workloads
+
+The benchmark form spans the full workspace width. Choose a custom prompt or a predefined research synthesis, summarization, code review, code generation or text generation task. Presets have small, medium and large source inputs targeting about 4,000, 16,000 and 64,000 characters. These are input character budgets, not tokenizer-specific counts or requested output lengths. Research uses supplied synthetic study notes and does not browse the web.
+
+Choose Same task each run to repeat one exact prompt, or Different task each run to generate distinct source material for every measured run. In different-task mode the warmup also uses its own separate task. Mixed task suite cycles through all five families; use at least five measured runs to cover every family. Custom prompts support exact repetition only. Different source material reduces prompt reuse but does not clear model weights, backend caches, or the short prefixes that prompts may share.
+
+Task generation is versioned and deterministic for a recorded task-set seed. Leave the seed blank to create fresh sources for each benchmark; enter a previous seed (0–2,147,483,647) to replay the same workloads on another model. The saved job contains the exact task prompts, task IDs and fingerprints. Individual samples retain their task identity and actual token counts. Cached prompt token counts are retained when the backend reports them; missing counters stay unknown. Results include an ordered workload fingerprint and per-family timing medians; mixed-suite medians combine different workloads and should not be treated as a single fixed-prompt speed.
+
+Accepted limits are displayed beside the inputs: 1–20 measured runs, 1–262,144 output tokens per run, custom prompts of 1–32,768 characters, and a total job timeout of 60–604,800 seconds (default 7,200 seconds). The output limit is a cap rather than a target. EOS may stop a generation earlier, and a backend can reject a cap that exceeds its available context after input tokens. Long outputs may require raising the job timeout.
+
+Older saved jobs and imported script samples remain unchanged and are labelled Historical in the scoreboard. Filter by workload family or Historical entries to avoid mixing old and new protocols. Inspect preserves original samples, limits and settings; no destructive migration is performed.
+
 ## Compare measurements
 
 Filter by backend or model and sort by date, end-to-end TPS, native decode TPS or TTFT. The scoreboard pages through all saved completed measurements, 100 per page. Inspect opens the original job with individual samples and result JSON; Export result JSON there saves the full record. Export this page JSON saves the current scoreboard page.

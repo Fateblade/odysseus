@@ -9,7 +9,7 @@ import time
 from services.operations.litellm_config import OperationsError
 
 METRICS = ("ttft_s", "decode_tps", "prefill_tps", "end_to_end_tps", "elapsed_s",
-           "prompt_tokens", "output_tokens", "speculative_acceptance")
+           "prompt_tokens", "output_tokens", "prompt_cached_tokens", "speculative_acceptance")
 
 
 def summarize(samples):
@@ -19,13 +19,19 @@ def summarize(samples):
 
 def card(job):
     spec, result = job["specification"], job.get("result", {})
+    fingerprint = result.get("prompt_sha256")
+    if fingerprint is None and not result.get("benchmark_version") and spec.get("prompt"):
+        fingerprint = hashlib.sha256(spec["prompt"].encode()).hexdigest()
     return {"id": job["id"], "created_at": job["created_at"], "backend": spec.get("backend"),
             "model": spec.get("model"), "source": result.get("source", "host benchmark"),
             "summary": {**summarize(result.get("samples", [])), **result.get("summary", {})}, "runs": len(result.get("samples", [])),
             "max_tokens": spec.get("max_tokens"), "warmup": spec.get("warmup"),
-            "prompt_sha256": result.get("prompt_sha256") or (hashlib.sha256(spec["prompt"].encode()).hexdigest() if spec.get("prompt") else None), "environment": result.get("environment", {}),
+            "prompt_sha256": fingerprint, "environment": result.get("environment", {}),
             "temperature": result.get("temperature"), "seed": result.get("seed"),
-            "thinking": result.get("thinking"), "notes": spec.get("notes", "")}
+            "thinking": result.get("thinking"), "notes": spec.get("notes", ""),
+            "historical": result.get("benchmark_version") != 2,
+            "workload": result.get("workload", {}), "workload_sha256": result.get("workload_sha256"),
+            "task_summaries": result.get("task_summaries", {})}
 
 
 def execute(management, payload):
@@ -47,6 +53,13 @@ def execute(management, payload):
             raise OperationsError("Invalid measurement filter.")
         records = [row for row in records if (not backend or row["backend"] == backend)
                    and query.casefold() in str(row["model"]).casefold()]
+        workload = payload.get("workload", "")
+        if not isinstance(workload, str):
+            raise OperationsError("Invalid workload filter.")
+        if workload == "historical":
+            records = [row for row in records if row["historical"]]
+        elif workload:
+            records = [row for row in records if not row["historical"] and row["workload"].get("task_family") == workload]
         sort = payload.get("sort", "created_at")
         if sort not in ("created_at", "end_to_end_tps", "decode_tps", "ttft_s"):
             raise OperationsError("Invalid measurement sort.")

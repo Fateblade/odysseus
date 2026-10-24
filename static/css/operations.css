@@ -130,8 +130,8 @@ body.operations-page { --operations-muted: color-mix(in srgb, var(--fg) 68%, var
 #operations-strata-config-fields > button { justify-self: start; margin-top: 16px; }
 .operations-diff { white-space: pre-wrap; overflow-wrap: anywhere; max-height: 400px; overflow: auto; padding: 16px; border: 1px solid var(--border); border-radius: 4px; font-size: 11px; background: color-mix(in srgb, var(--bg) 72%, var(--panel)); }
 .operations-command-output pre { margin: 0; min-height: 180px; }
-.operations-benchmark { grid-column: span 7; }
-.operations-scripts { grid-column: span 5; }
+.operations-benchmark { grid-column: 1 / -1; }
+.operations-scripts { grid-column: 1 / -1; }
 .operations-scoreboard, .operations-history, .operations-job-detail { grid-column: 1 / -1; }
 .operations-job-detail { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 0 20px; }
 .operations-job-detail > :is(h2, p, .cookbook-actions) { grid-column: 1 / -1; }
@@ -161,7 +161,7 @@ body.operations-page { --operations-muted: color-mix(in srgb, var(--fg) 68%, var
   #operations-metrics .operations-metric { border: 0; }
   #operations-metrics .operations-metric:nth-child(even) { border-left: 1px solid var(--border); }
   #operations-metrics .operations-metric:nth-child(n+3) { border-top: 1px solid var(--border); }
-  .operations-benchmark, .operations-scripts { grid-column: span 6; }
+  .operations-benchmark, .operations-scripts { grid-column: 1 / -1; }
 }
 @media (max-width: 900px) {
   #operations-request-activity { grid-template-columns: 1fr; }
@@ -227,3 +227,5 @@ body.operations-page { --operations-muted: color-mix(in srgb, var(--fg) 68%, var
   .operations-resources dl > div { flex-direction: column; gap: 0; }
   .operations-resources dd { font-size: 11px; }
 }
+
+.operations-benchmark .operations-benchmark-prompt { grid-column: 1 / -1; }

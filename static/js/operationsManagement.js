@@ -1,4 +1,5 @@
-import { initializeScoreboard, refreshScoreboard } from './operationsScoreboard.js?v=20261023scoreboard1';
+import { initializeBenchmark, setBenchmarkCatalog } from './operationsBenchmark.js?v=20261024tasks1';
+import { initializeScoreboard, refreshScoreboard } from './operationsScoreboard.js?v=20261024tasks1';
 const el = id => document.getElementById(id);
 let active = null;
 let timer = null;
@@ -439,41 +440,10 @@ function initialize() {
   jobsContent.id = 'operations-jobs-content';
   jobsContent.hidden = true;
   jobs.append(jobsContent);
-  const benchmark = section(jobsContent, 'TPS benchmark', 'Compare repeated generations with an optional warmup. Decode TPS uses backend timings; end-to-end TPS includes loading, queueing and prefill. Caches are not cleared.', 'operations-benchmark');
-  const grid = node('div', '', 'operations-grid');
-  benchmark.append(grid);
-  const backend = field(grid, 'operations-benchmark-backend', 'Backend', 'ollama', ['ollama', 'strata', 'dwarfstar', 'maya']);
-  backend.addEventListener('change', () => {
-    if (backend.value === 'strata') el('operations-benchmark-model').value = strataState?.active_model || '';
-    if (backend.value === 'maya') el('operations-benchmark-model').value = mayaAliases[0] || 'deepseek-v4.1-flash';
-    if (backend.value === 'dwarfstar') el('operations-benchmark-model').value =
-      dwarfstarAliases.find(name => name === 'deepseek-v4-flash') || dwarfstarAliases[0] || 'deepseek-v4-flash';
-  });
-  benchmark.append(node('p', 'DwarfStar and Maya comparison benchmarks disable thinking. Maya preserves native timings and draft acceptance when supplied. DwarfStar proof-of-concept benchmarks disable thinking. Its API supplies token usage but no native decode or prefill timing; those rates remain unavailable. End-to-end TPS is measured by the client.', 'operations-muted'));
-  field(grid, 'operations-benchmark-model', 'Model name');
-  el('operations-benchmark-model').setAttribute('list', suggestions.id);
-  const runs = field(grid, 'operations-benchmark-runs', 'Measured runs', 3, null, 'number');
-  runs.min = '1'; runs.max = '20';
-  const tokens = field(grid, 'operations-benchmark-tokens', 'Maximum output tokens', 256, null, 'number');
-  tokens.min = '1'; tokens.max = '8192';
-  field(grid, 'operations-benchmark-warmup', 'Warmup', 'yes', ['yes', 'no']);
-  field(grid, 'operations-benchmark-size', 'Model artifacts GiB (optional)', '', null, 'number').step = 'any';
-  field(grid, 'operations-benchmark-quant', 'Quantization (optional)');
-  field(grid, 'operations-benchmark-version', 'Engine version / revision (optional)');
-  field(grid, 'operations-benchmark-notes', 'Notes / test label', '', null, 'textarea');
-  field(grid, 'operations-benchmark-prompt', 'Prompt', 'Explain how shared memory works in an integrated GPU system.', null, 'textarea');
-  benchmark.append(button('Run benchmark', () => task(async () => {
-    const body = { kind: 'benchmark', backend: el('operations-benchmark-backend').value,
-      model: el('operations-benchmark-model').value, prompt: el('operations-benchmark-prompt').value,
-      model_size_bytes: el('operations-benchmark-size').value ? Math.round(Number(el('operations-benchmark-size').value) * 1024 ** 3) : null,
-      quantization: el('operations-benchmark-quant').value, engine_version: el('operations-benchmark-version').value, notes: el('operations-benchmark-notes').value,
-      runs: Number(runs.value), max_tokens: Number(tokens.value), warmup: el('operations-benchmark-warmup').value === 'yes' };
-    if (!await confirmOperation(`Run ${body.runs} measured generations on ${body.backend}/${body.model}${body.warmup ? ' plus one warmup' : ''}? This shares the running inference service with other requests.`)) return;
-    const result = await request('jobs/start', body);
-    selectedJob = result.job.id;
-    await refreshJobs();
-    status('Benchmark started.');
-  })));
+  initializeBenchmark(jobsContent, { section, field, button, request, task, confirmOperation, suggestions: suggestions.id,
+    modelForBackend: backend => backend === 'strata' ? strataState?.active_model : backend === 'maya' ? mayaAliases[0] || 'deepseek-v4.1-flash' :
+      backend === 'dwarfstar' ? dwarfstarAliases.find(name => name === 'deepseek-v4-flash') || dwarfstarAliases[0] || 'deepseek-v4-flash' : null,
+    started: async result => { selectedJob = result.job.id; await refreshJobs(); status('Benchmark started.'); } });
   initializeScoreboard(jobsContent, { section, field, button, request, task, inspect: async id => { selectedJob = id; await refreshDetail(); el('operations-job-output').scrollIntoView({ block: 'nearest' }); } });
   const scripts = section(jobsContent, 'Python scripts', 'Save a definition for a script in your host scripts folder, then run it with its saved arguments and timeout.', 'operations-scripts');
   scripts.id = 'operations-scripts-card';
@@ -643,6 +613,7 @@ async function refreshDetail() {
 async function refreshJobs() {
   const result = await request('jobs');
   el('operations-jobs-content').hidden = false;
+  setBenchmarkCatalog(result.benchmark);
   el('operations-scripts-card').querySelectorAll('input, button').forEach(input => { input.disabled = !result.scripts_enabled; });
   const scripts = el('operations-script-list');
   scripts.replaceChildren();

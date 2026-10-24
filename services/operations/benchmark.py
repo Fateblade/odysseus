@@ -101,6 +101,10 @@ def _sample(management, specification):
     else:
         result.update(decode_tps=timings.get("predicted_per_second"), prefill_tps=timings.get("prompt_per_second"),
                       timings=timings, measurement="backend timings when supplied; client wall time otherwise")
+    if not ollama:
+        details = usage.get("prompt_tokens_details")
+        cached = details.get("cached_tokens") if isinstance(details, dict) else None
+        result["prompt_cached_tokens"] = cached if type(cached) is int and cached >= 0 else None
     offered, accepted = timings.get("draft_n"), timings.get("draft_n_accepted")
     result["speculative_acceptance"] = (accepted / offered if type(offered) is int and offered > 0
                                          and type(accepted) is int and 0 <= accepted <= offered else None)
@@ -111,25 +115,38 @@ def _sample(management, specification):
 
 
 def run(management, specification):
+    from services.operations.scoreboard import summarize
+    legacy_task = {"id": "custom", "family": "custom", "size": None, "prompt": specification["prompt"],
+                   "prompt_sha256": hashlib.sha256(specification["prompt"].encode()).hexdigest()}
+    tasks = specification.get("tasks") or [legacy_task] * specification["runs"]
+    def measure(item):
+        result = sample(management, {**specification, "prompt": item["prompt"]})
+        result["task"] = {key: value for key, value in item.items() if key != "prompt"}
+        return result
     warmup = None
     if specification["warmup"]:
         print("Warmup (excluded from measured samples)", flush=True)
-        warmup = sample(management, specification)
+        warmup = measure(specification.get("warmup_task") or tasks[0])
     environment = None
     samples = []
-    for index in range(specification["runs"]):
-        result = sample(management, specification)
+    for index, item in enumerate(tasks):
+        result = measure(item)
         samples.append(result)
         if environment is None:
             environment = snapshot(management, specification)
         print(json.dumps({"run": index + 1, **result}), flush=True)
-    from services.operations.scoreboard import summarize
-    summary = summarize(samples)
-    return {"backend": specification["backend"], "model": specification["model"], "summary": summary,
+    fingerprints = [item["prompt_sha256"] for item in tasks]
+    families = list(dict.fromkeys(item["family"] for item in tasks))
+    return {"backend": specification["backend"], "model": specification["model"], "summary": summarize(samples),
             "samples": samples, "warmup": warmup, "temperature": 0, "seed": 42,
-            "environment": environment, "prompt_sha256": hashlib.sha256(specification["prompt"].encode()).hexdigest(),
+            "benchmark_version": specification.get("benchmark_version"),
+            "workload": {key: specification.get(key) for key in ("task_family", "task_size", "task_mode", "task_seed")},
+            "workload_sha256": hashlib.sha256(json.dumps(fingerprints).encode()).hexdigest(),
+            "task_summaries": {family: {"runs": sum(row["task"]["family"] == family for row in samples),
+                               "summary": summarize([row for row in samples if row["task"]["family"] == family])} for family in families},
+            "environment": environment, "prompt_sha256": fingerprints[0] if len(set(fingerprints)) == 1 else None,
             "thinking": False if specification["backend"] in ("dwarfstar", "maya") else "backend default",
-            "note": "Warmup does not clear caches. End-to-end TPS includes load, queue and prefill; unavailable timings stay null."}
+            "note": "Warmup is excluded; caches are not cleared. Distinct tasks reduce shared prompt reuse but do not guarantee cache-free runs. Mixed-task medians combine different workloads. End-to-end TPS includes load, queue and prefill; unavailable timings stay null."}
 
 
 def snapshot(management, specification):
