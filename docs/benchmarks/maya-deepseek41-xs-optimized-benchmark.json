@@ -1,0 +1,149 @@
+{
+  "backend": "maya",
+  "model": "deepseek-v4.1-flash",
+  "summary": {
+    "ttft_s": 0.06644725499791093,
+    "decode_tps": 16.9,
+    "prefill_tps": 16.2,
+    "end_to_end_tps": 16.777548212482145,
+    "elapsed_s": 15.258486922990414,
+    "prompt_tokens": 15,
+    "output_tokens": 256,
+    "speculative_acceptance": null
+  },
+  "samples": [
+    {
+      "elapsed_s": 15.257884774997365,
+      "ttft_s": 0.06748138299735729,
+      "output_tokens": 256,
+      "prompt_tokens": 15,
+      "decode_tps": 16.9,
+      "prefill_tps": 16.2,
+      "timings": {
+        "cache_n": 14,
+        "prompt_n": 1,
+        "prompt_ms": 61.9,
+        "prompt_per_token_ms": 61.9,
+        "prompt_per_second": 16.2,
+        "predicted_n": 256,
+        "predicted_ms": 15190.6,
+        "predicted_per_token_ms": 59.338,
+        "predicted_per_second": 16.9,
+        "draft_n": 0,
+        "draft_n_accepted": 0
+      },
+      "measurement": "backend timings when supplied; client wall time otherwise",
+      "speculative_acceptance": null,
+      "end_to_end_tps": 16.778210333551574
+    },
+    {
+      "elapsed_s": 15.258486922990414,
+      "ttft_s": 0.06644725499791093,
+      "output_tokens": 256,
+      "prompt_tokens": 15,
+      "decode_tps": 16.9,
+      "prefill_tps": 16.2,
+      "timings": {
+        "cache_n": 14,
+        "prompt_n": 1,
+        "prompt_ms": 61.8,
+        "prompt_per_token_ms": 61.8,
+        "prompt_per_second": 16.2,
+        "predicted_n": 256,
+        "predicted_ms": 15191.9,
+        "predicted_per_token_ms": 59.343,
+        "predicted_per_second": 16.9,
+        "draft_n": 0,
+        "draft_n_accepted": 0
+      },
+      "measurement": "backend timings when supplied; client wall time otherwise",
+      "speculative_acceptance": null,
+      "end_to_end_tps": 16.777548212482145
+    },
+    {
+      "elapsed_s": 15.314296375989215,
+      "ttft_s": 0.0664317159971688,
+      "output_tokens": 256,
+      "prompt_tokens": 15,
+      "decode_tps": 16.8,
+      "prefill_tps": 16.3,
+      "timings": {
+        "cache_n": 14,
+        "prompt_n": 1,
+        "prompt_ms": 61.2,
+        "prompt_per_token_ms": 61.2,
+        "prompt_per_second": 16.3,
+        "predicted_n": 256,
+        "predicted_ms": 15247.7,
+        "predicted_per_token_ms": 59.561,
+        "predicted_per_second": 16.8,
+        "draft_n": 0,
+        "draft_n_accepted": 0
+      },
+      "measurement": "backend timings when supplied; client wall time otherwise",
+      "speculative_acceptance": null,
+      "end_to_end_tps": 16.716406272597286
+    }
+  ],
+  "warmup": {
+    "elapsed_s": 16.083711400002358,
+    "ttft_s": 0.6716371609945782,
+    "output_tokens": 256,
+    "prompt_tokens": 15,
+    "decode_tps": 16.6,
+    "prefill_tps": 22.6,
+    "timings": {
+      "cache_n": 0,
+      "prompt_n": 15,
+      "prompt_ms": 663.7,
+      "prompt_per_token_ms": 44.247,
+      "prompt_per_second": 22.6,
+      "predicted_n": 256,
+      "predicted_ms": 15412,
+      "predicted_per_token_ms": 60.203,
+      "predicted_per_second": 16.6,
+      "draft_n": 0,
+      "draft_n_accepted": 0
+    },
+    "measurement": "backend timings when supplied; client wall time otherwise",
+    "speculative_acceptance": null,
+    "end_to_end_tps": 15.916724295361485
+  },
+  "temperature": 0,
+  "seed": 42,
+  "environment": {
+    "sampled_at": 1792842649.3589003,
+    "system": "Linux",
+    "kernel": "7.0.0-38-generic",
+    "machine": "x86_64",
+    "context_tokens": 4096,
+    "model_size_bytes": null,
+    "reported_model": "deepseek-v4.1-flash",
+    "engine_version": "1.1.22",
+    "memory_after_sample": {
+      "free_bytes": 1247600640,
+      "anonymous_bytes": 3619905536,
+      "cached_bytes": 24479334400,
+      "buffers_bytes": 338944000,
+      "shared_bytes": 4288577536,
+      "slab_bytes": 1077039104,
+      "slab_reclaimable_bytes": 722923520,
+      "kernel_stack_bytes": 18022400,
+      "page_tables_bytes": 40853504,
+      "total_bytes": 32727912448,
+      "available_bytes": 22015827968,
+      "used_bytes": 10712084480,
+      "swap_total_bytes": 8589930496,
+      "swap_used_bytes": 2191360
+    },
+    "cpu": "AMD RYZEN AI MAX+ 395 w/ Radeon 8060S",
+    "declared": {
+      "model_size_bytes": null,
+      "quantization": "",
+      "engine_version": ""
+    }
+  },
+  "prompt_sha256": "114116f8897d5fceedf1a2b60f290b673158994e1664a38d5858b87a9f030a07",
+  "thinking": false,
+  "note": "Warmup does not clear caches. End-to-end TPS includes load, queue and prefill; unavailable timings stay null."
+}
