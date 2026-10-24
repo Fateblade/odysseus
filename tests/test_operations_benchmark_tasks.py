@@ -45,6 +45,8 @@ def test_invalid_task_settings_fail_with_validation_error(changes):
 def test_job_accepts_256k_output_cap_and_long_timeout_but_rejects_over_limit(tmp_path, monkeypatch):
     management = SimpleNamespace(settings={"jobs_directory": str(tmp_path)}, dwarfstar_url="http://native")
     monkeypatch.setattr(jobs, "enqueue", lambda management, spec: spec)
+    from services.operations import benchmark_limits
+    monkeypatch.setattr(benchmark_limits, "limits", lambda *args: {"max_output_tokens": 262144})
     payload = {"action": "job_start", "kind": "benchmark", "backend": "dwarfstar", "model": "test",
                "runs": 2, "task_family": "research", "task_mode": "different", "max_tokens": 262144, "timeout": 604800}
     result = jobs.execute(management, payload)

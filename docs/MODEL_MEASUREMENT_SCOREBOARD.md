@@ -14,6 +14,16 @@ Accepted limits are displayed beside the inputs: 1–20 measured runs, 1–262,1
 
 Older saved jobs and imported script samples remain unchanged and are labelled Historical in the scoreboard. Filter by workload family or Historical entries to avoid mixing old and new protocols. Inspect preserves original samples, limits and settings; no destructive migration is performed.
 
+## Check limits for the selected model
+
+Selecting a backend and model reads its active runtime context and updates the output input's accepted range. The model's training ceiling is not substituted for its current allocation. For an unloaded Ollama model, or an endpoint that does not report context, the limit is explicitly unknown; reading limits never loads a model.
+
+For Maya, Check task limits calls the native token-counting API for the exact selected prompts, including warmup. The available output cap is the runtime context minus the largest prompt and Maya's eight-token engine reserve, bounded by the application ceiling of 262,144. Repeated identical prompts are counted once. Use available output cap applies that value only when an exact budget is available; output limits are never silently reduced. A task that leaves no output room needs a smaller prompt or more context.
+
+Run benchmark checks task limits automatically before confirmation. The server checks them again before queueing, so a context change after a browser check cannot queue a request that already exceeds the newly observed limit. A fresh task seed is resolved during the check and reused for the reviewed submission; the next completed benchmark gets a fresh set when the seed field stays blank. The saved result includes the checked context budget. Runtime changes outside managed job controls can still cause a later backend rejection.
+
+DwarfStar, Strata and loaded Ollama models expose their allocated context, but this integration does not have exact prompt-budget accounting for them. Their displayed ceiling still needs prompt allowance, and the backend remains responsible for final token-level validation.
+
 ## Compare measurements
 
 Filter by backend or model and sort by date, end-to-end TPS, native decode TPS or TTFT. The scoreboard pages through all saved completed measurements, 100 per page. Inspect opens the original job with individual samples and result JSON; Export result JSON there saves the full record. Export this page JSON saves the current scoreboard page.

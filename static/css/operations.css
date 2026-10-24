@@ -229,3 +229,5 @@ body.operations-page { --operations-muted: color-mix(in srgb, var(--fg) 68%, var
 }
 
 .operations-benchmark .operations-benchmark-prompt { grid-column: 1 / -1; }
+
+.operations-benchmark .operations-benchmark-budget { grid-column: 1 / -1; max-width: none; }

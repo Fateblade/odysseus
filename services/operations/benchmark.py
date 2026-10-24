@@ -184,6 +184,7 @@ def run(management, specification):
     return {"backend": specification["backend"], "model": specification["model"], "summary": summarize(samples),
             "samples": samples, "warmup": warmup, "temperature": 0, "seed": 42,
             "benchmark_version": specification.get("benchmark_version"),
+            "context_budget": specification.get("context_budget"),
             "workload": {key: specification.get(key) for key in ("task_family", "task_size", "task_mode", "task_seed")},
             "workload_sha256": hashlib.sha256(json.dumps(fingerprints).encode()).hexdigest(),
             "task_summaries": {family: {"runs": sum(row["task"]["family"] == family for row in samples),

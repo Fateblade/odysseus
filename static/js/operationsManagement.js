@@ -1,5 +1,5 @@
-import { initializeBenchmark, setBenchmarkCatalog } from './operationsBenchmark.js?v=20261024tasks1';
-import { initializeScoreboard, refreshScoreboard } from './operationsScoreboard.js?v=20261024tasks1';
+import { initializeBenchmark, setBenchmarkCatalog, refreshBenchmarkLimits } from './operationsBenchmark.js?v=20261024limits1';
+import { initializeScoreboard, refreshScoreboard } from './operationsScoreboard.js?v=20261024limits1';
 const el = id => document.getElementById(id);
 let active = null;
 let timer = null;
@@ -682,6 +682,7 @@ export function openManagement(panel) {
   initialize();
   clearInterval(timer);
   active = panel;
+  if (panel === 'jobs') refreshBenchmarkLimits();
   if (busy) pendingPanel = panel;
   else task(panel === 'management' ? refreshManagement : refreshJobs);
   timer = setInterval(poll, 5000);

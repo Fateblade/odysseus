@@ -178,7 +178,10 @@ def execute(management, payload):
             notes = payload.get("notes", "")
             if not isinstance(notes, str) or len(notes) > 2000:
                 raise OperationsError("Notes must be at most 2000 characters.")
+            from services.operations.benchmark_limits import limits, validate_budget
+            budget = limits(management, payload, workload)
+            validate_budget(budget, tokens)
             return enqueue(management, {"kind": "benchmark", "backend": backend, "model": model_name(payload.get("model")),
-                                       **workload, "runs": runs, "max_tokens": tokens, "warmup": bool(payload.get("warmup", True)),
+                                       **workload, "context_budget": budget, "runs": runs, "max_tokens": tokens, "warmup": bool(payload.get("warmup", True)),
                                        "declared": declared, "notes": notes, "timeout": timeout})
     raise OperationsError("Unknown job operation.")

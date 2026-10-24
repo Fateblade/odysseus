@@ -54,6 +54,9 @@ def dispatch_request(args, management, payload):
         if payload["action"] == "audit_detail" and (not isinstance(event_id, str) or not re.fullmatch(r"[a-f0-9]{32}", event_id)):
             raise OperationsError("Invalid audit entry identifier.")
         return {"configured": True, **read(directory(management), event_id=event_id)}
+    if payload.get("action") == "benchmark_limits":
+        from services.operations.benchmark_limits import limits
+        return limits(management, payload)
     if payload.get("action") == "resources":
         from services.operations.overview import resources
         return resources(args.physical_memory_gib)

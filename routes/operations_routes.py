@@ -41,7 +41,7 @@ def setup_operations_routes(service=None):
                                 "client_ip": request.client.host if request.client else None,
                                 "user_agent": request.headers.get("user-agent", "")[:512], "request_id": uuid.uuid4().hex}
             result = await operations.run(action, values)
-            if action in ("audit", "audit_detail", "resources"):
+            if action in ("audit", "audit_detail", "resources", "benchmark_limits"):
                 return JSONResponse(result, headers={"Cache-Control": "no-store"})
             return result
         except OperationsError as error:
@@ -94,6 +94,10 @@ def setup_operations_routes(service=None):
     @router.post("/jobs/detail")
     async def get_job(request: Request):
         return await invoke(request, "job_detail")
+
+    @router.post("/benchmark/limits")
+    async def get_benchmark_limits(request: Request):
+        return await invoke(request, "benchmark_limits")
 
     @router.post("/jobs/start")
     async def start_job(request: Request):

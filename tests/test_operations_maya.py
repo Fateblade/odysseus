@@ -45,6 +45,9 @@ def maya_server():
         def do_POST(self):
             body = json.loads(self.rfile.read(int(self.headers["Content-Length"])))
             requests.append((self.path, body))
+            if self.path == "/api/tokens":
+                self.reply(json.dumps({"tokens": 13, "max_context": state["context"], "approximate": False}).encode())
+                return
             if self.path == "/api/context":
                 assert self.headers["Origin"] == f"http://{self.headers['Host']}"
                 state["context"] = body["max_context"]
@@ -279,3 +282,15 @@ def test_comparison_cli_uses_identical_fixtures_and_preserves_tool_ids(maya_serv
     transcript = result["tools"]["transcript"]
     assert len(transcript[0]["request"]["messages"]) == 1
     assert transcript[1]["request"]["messages"][-1]["tool_call_id"] == "fixed-call-id"
+
+
+
+def test_real_helper_reads_selected_context_and_exact_budget_without_generation(maya_server):
+    base, requests, state = maya_server
+    state["context"] = 128000
+    host = HostOperations({"ODYSSEUS_OPERATIONS_HOST_HELPER": str(ROOT / "scripts/odysseus-litellm.py"),
+                           "ODYSSEUS_OPERATIONS_MAYA_URL": base})
+    result = asyncio.run(host.run("benchmark_limits", {"backend": "maya", "model": MODEL, "validate_tasks": True,
+                                                      "prompt": "Example", "runs": 1, "warmup": True}))
+    assert result["context_tokens"] == 128000 and result["max_output_tokens"] == 127979 and result["exact"]
+    assert [path for path, body in requests if body is not None] == ["/api/tokens"]
