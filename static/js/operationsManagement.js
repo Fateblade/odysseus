@@ -275,27 +275,31 @@ function initialize() {
     control.id = `operations-maya-${operation}`; control.disabled = true; maya.append(control);
   }
   maya.append(button('Refresh status', () => task(refreshResidency)));
-  const mayaStatus = node('p', 'Load context limits when Maya is ready.', 'operations-status'); mayaStatus.id = 'operations-maya-config-status';
+  const mayaStatus = node('p', 'Reading Maya settings…', 'operations-status'); mayaStatus.id = 'operations-maya-config-status';
   const mayaFields = node('div'); mayaFields.id = 'operations-maya-config-fields'; mayaFields.hidden = true;
   const mayaContext = field(mayaFields, 'operations-maya-context', 'Maximum context (tokens)', 4096, null, 'number'); mayaContext.step = 1;
+  const mayaDrafting = field(mayaFields, 'operations-maya-drafting', 'DSpark speculative decoding', 'Off', ['Off', 'On']);
+  const mayaDraftingNote = node('p', '', 'operations-muted'); mayaDraftingNote.id = 'operations-maya-drafting-note'; mayaFields.append(mayaDraftingNote);
   const mayaChange = node('pre', '', 'operations-diff'); mayaChange.id = 'operations-maya-change'; mayaChange.hidden = true;
-  const mayaApply = button('Apply context', () => task(async () => {
-    if (!mayaReview) throw new Error('Review the context change first.');
-    if (!await confirmOperation(`Set Maya context to ${mayaReview.context.toLocaleString()}? Native reload saves its config and may interrupt requests. On failure Maya attempts recovery. Cancelling the host job does not cancel a native reload.`)) return;
-    const result = await request('maya/apply', { revision: mayaReview.revision, context: mayaReview.context, review_digest: mayaReview.review_digest });
+  const mayaApply = button('Apply settings', () => task(async () => {
+    if (!mayaReview) throw new Error('Review the settings change first.');
+    const effect = mayaReview.managed_settings ? `DSpark ${mayaReview.drafting ? 'on' : 'off'}. A running service restarts and interrupts requests; a stopped service stays stopped. Previous settings are backed up and recovery is attempted if startup fails.` : 'Native reload saves its config and may interrupt requests. Cancelling the host job does not cancel a native reload.';
+    if (!await confirmOperation(`Set Maya context to ${mayaReview.context.toLocaleString()} tokens? ${effect} Larger contexts and drafting use more memory.`)) return;
+    const result = await request('maya/apply', { revision: mayaReview.revision, context: mayaReview.context, ...(mayaReview.managed_settings ? { drafting: mayaReview.drafting } : {}), review_digest: mayaReview.review_digest });
     mayaReview = null; mayaState = null; mayaApply.disabled = true; mayaChange.hidden = true;
-    selectedJob = result.job.id; status('Maya context job queued.'); await refreshJobs();
+    selectedJob = result.job.id; status('Maya settings job queued. Inspect its progress in Scripts & TPS tests.'); await refreshJobs();
   }));
   mayaApply.id = 'operations-maya-apply'; mayaApply.disabled = true;
-  mayaFields.append(button('Review context change', () => task(async () => {
+  mayaFields.append(button('Review settings', () => task(async () => {
     mayaReview = null; mayaApply.disabled = true;
-    const context = Number(mayaContext.value); const revision = mayaState?.revision;
-    const reviewed = await request('maya/preview', { revision, context });
-    if (Number(mayaContext.value) !== context || mayaState?.revision !== revision) throw new Error('Context changed during review. Review again.');
+    const context = Number(mayaContext.value); const revision = mayaState?.revision; const drafting = mayaDrafting.value === 'On';
+    const reviewed = await request('maya/preview', { revision, context, ...(mayaState?.managed_settings ? { drafting } : {}) });
+    if (Number(mayaContext.value) !== context || (mayaDrafting.value === 'On') !== drafting || mayaState?.revision !== revision) throw new Error('Settings changed during review. Review again.');
     mayaReview = reviewed; mayaChange.textContent = reviewed.display_change; mayaChange.hidden = false; mayaApply.disabled = false;
   })), mayaApply, mayaChange);
   mayaContext.addEventListener('input', () => { mayaReview = null; mayaApply.disabled = true; mayaChange.hidden = true; });
-  maya.append(mayaStatus, button('Reload context limits', () => task(loadMaya)), mayaFields);
+  mayaDrafting.addEventListener('change', () => { mayaReview = null; mayaApply.disabled = true; mayaChange.hidden = true; });
+  maya.append(mayaStatus, button('Reload settings', () => task(loadMaya)), mayaFields);
   const dwarfstar = section(content, 'DwarfStar residency', 'DeepSeek V4 Flash is selected when the server starts. Starting loads the model; stopping releases it and interrupts requests. First unload Strata and Ollama models. Other backends are never stopped automatically.', 'operations-dwarfstar-residency');
   const dwarfstarLive = node('div', 'Reading live status…');
   dwarfstarLive.id = 'operations-dwarfstar-live';
@@ -347,6 +351,7 @@ function initialize() {
   })), dwarfstarApply, dwarfstarChange);
   dwarfstarContext.addEventListener('input', () => { dwarfstarReview = null; dwarfstarApply.disabled = true; dwarfstarChange.hidden = true; });
   dwarfstar.append(dwarfstarStatus, button('Reload context configuration', () => task(loadDwarfstar)), dwarfstarFields);
+  content.insertBefore(dwarfstar, maya);
   const configuration = section(content, 'Strata configuration', 'Choose quantization and context. Applying prepares the model, restarts Strata and verifies the result. New quantizations may need a download.', 'operations-strata-configuration');
   const contextStatus = node('p', 'Loading Strata configuration…', 'operations-status');
   contextStatus.id = 'operations-strata-config-status';
@@ -561,6 +566,8 @@ async function refreshManagement() {
   if (!strataState || (!draft && !strataReview)) await loadStrata();
   const dwarfstarDraft = dwarfstarState && Number(el('operations-dwarfstar-context').value) !== dwarfstarState.configured_context;
   if (!dwarfstarState || (!dwarfstarDraft && !dwarfstarReview)) await loadDwarfstar();
+  const mayaDraft = mayaState && (Number(el('operations-maya-context').value) !== (mayaState.configured_context ?? mayaState.active_context) || (el('operations-maya-drafting').value === 'On') !== Boolean(mayaState.drafting));
+  if (!mayaState || (!mayaDraft && !mayaReview)) await loadMaya();
   await refreshResidency();
 }
 
@@ -568,13 +575,20 @@ async function loadMaya() {
   mayaReview = null; mayaState = null;
   el('operations-maya-apply').disabled = true; el('operations-maya-change').hidden = true;
   el('operations-maya-config-fields').hidden = true;
-  const result = await request('maya/config');
-  el('operations-maya-config-status').textContent = result.configured ?
-    `Active: ${tokens(result.active_context)}. Operational ceiling: ${tokens(result.maximum_context)}. Test memory at each prompt depth.` : result.message;
-  if (result.configured) {
-    mayaState = result; el('operations-maya-context').value = result.active_context;
-    el('operations-maya-context').min = result.minimum_context; el('operations-maya-context').max = result.maximum_context;
-    el('operations-maya-config-fields').hidden = false;
+  try {
+    const result = await request('maya/config');
+    el('operations-maya-config-status').textContent = result.configured ?
+      `Configured: ${tokens(result.configured_context ?? result.active_context)} · Active: ${tokens(result.active_context)}. Limit: ${tokens(result.maximum_context)}. ${result.managed_settings ? result.running ? 'Running; applying restarts it.' : 'Stopped; applying keeps it stopped.' : 'Native context reload.'}` : result.message;
+    if (result.configured) {
+      mayaState = result; el('operations-maya-context').value = result.configured_context ?? result.active_context;
+      el('operations-maya-context').min = result.minimum_context; el('operations-maya-context').max = result.maximum_context;
+      el('operations-maya-drafting').value = result.drafting ? 'On' : 'Off';
+      el('operations-maya-drafting').disabled = !result.managed_settings || (!result.drafter_available && !result.drafting);
+      el('operations-maya-drafting-note').textContent = !result.managed_settings ? 'DSpark requires maya_setup.config_file and a managed user service on the host.' : result.drafter_available ? 'Uses the pack’s MTP drafter. On may improve or reduce TPS; compare with the same benchmark. Off unloads the drafter on restart.' : 'MTP drafter not found in this pack. Enabling DSpark is unavailable.';
+      el('operations-maya-config-fields').hidden = false;
+    }
+  } catch (error) {
+    el('operations-maya-config-status').textContent = error.message;
   }
 }
 
@@ -682,8 +696,11 @@ async function poll() {
   try {
     await (active === 'management' ? refreshResidency() : refreshJobs());
     if (active === 'management') {
+      if (busy) return;
       const draft = dwarfstarState && Number(el('operations-dwarfstar-context').value) !== dwarfstarState.configured_context;
       if (!draft && !dwarfstarReview) await loadDwarfstar();
+      const mayaDraft = mayaState && (Number(el('operations-maya-context').value) !== (mayaState.configured_context ?? mayaState.active_context) || (el('operations-maya-drafting').value === 'On') !== Boolean(mayaState.drafting));
+      if (!busy && !mayaDraft && !mayaReview) await loadMaya();
     }
   }
   catch (error) { status(error.message, true); }

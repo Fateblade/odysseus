@@ -113,7 +113,7 @@ def supervise(folder, management):
                 state = "cancelled" if (folder / "cancel").exists() else "timed_out"
                 os.killpg(child.pid, signal.SIGTERM)
                 try:
-                    recovery_timeout = {"strata_setup": 540, "dwarfstar_context": 900}.get(specification.get("kind"), 5)
+                    recovery_timeout = {"strata_setup": 540, "dwarfstar_context": 900, "maya_context": 1500}.get(specification.get("kind"), 5)
                     child.wait(timeout=recovery_timeout)
                 except subprocess.TimeoutExpired:
                     os.killpg(child.pid, signal.SIGKILL)

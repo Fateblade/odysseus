@@ -1,4 +1,4 @@
-"""Reviewed, serialized changes through Maya's native context reload API."""
+"""Reviewed Maya settings with legacy native context-reload support."""
 
 import hashlib
 import json
@@ -10,6 +10,9 @@ from services.operations.maya import inventory
 
 
 def snapshot(management):
+    from services.operations import maya_settings
+    if maya_settings.enabled(management):
+        return maya_settings.snapshot(management)
     if not management.maya_url:
         return {"configured": False, "message": "Configure the Maya host endpoint first."}
     live = inventory(management.maya_url)
@@ -35,6 +38,9 @@ def snapshot(management):
 
 
 def review(management, payload):
+    from services.operations import maya_settings
+    if maya_settings.enabled(management):
+        return maya_settings.review(management, payload)
     current = snapshot(management)
     if not current["configured"]:
         raise OperationsError(current["message"], 503)
@@ -54,10 +60,15 @@ def enqueue_apply(management, payload):
         raise OperationsError("Review the exact Maya context change before applying.", 409)
     from services.operations.jobs import enqueue
     return enqueue(management, {"kind": "maya_context", "context": reviewed["context"],
-                                "revision": reviewed["revision"], "review_digest": reviewed["review_digest"], "timeout": 900})
+                                **({"drafting": reviewed["drafting"]} if reviewed.get("managed_settings") else {}),
+                                "revision": reviewed["revision"], "review_digest": reviewed["review_digest"],
+                                "timeout": 1800 if reviewed.get("managed_settings") else 900})
 
 
 def run(management, specification, folder):
+    from services.operations import maya_settings
+    if maya_settings.enabled(management):
+        return maya_settings.run(management, specification, folder)
     from services.operations.management import api
     reviewed = review(management, specification)
     if specification.get("review_digest") != reviewed["review_digest"]:

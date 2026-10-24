@@ -274,11 +274,14 @@ Merge these entries into `~/.config/odysseus-operations/management.json`; do not
   "services": {
     "maya": {"unit": "maya-xs.service", "scope": "user"}
   },
-  "maya_setup": {"maximum_context": 4096}
+  "maya_setup": {
+    "config_file": "/home/seth/project-maya-xs/maya-ds4-hip.json",
+    "maximum_context": 4096
+  }
 }
 ```
 
-Keep all existing services, jobs, scripts and audit settings. Monitoring configuration alone does not grant service permissions. The initial context ceiling stays at 4096 until measured memory permits an increase; it is an operational limit rather than the checkpoint's trained limit.
+Keep all existing services, jobs, scripts and audit settings. Monitoring configuration alone does not grant service permissions. Substitute your actual home/config path. The standard `~/project-maya-xs/maya-ds4-hip.json` location is detected automatically, so existing installations at that location need no management-file edit. A custom user-unit location can be supplied as `maya_setup.unit_file`; the default is `~/.config/systemd/user/maya-xs.service`. Settings control requires the direct `serve.server --config ...` user unit above, without drop-ins or pending daemon reloads.
 
 ```bash
 cd /mnt/odysseus-fateblade
@@ -288,9 +291,13 @@ ODYSSEUS_IMAGE=odysseus-fateblade:local docker compose up -d --no-deps --pull ne
 
 Check Operations overview and Management → Maya residency. Start/stop/restart and context applies use the existing one-active-host-job queue. Startup rejects known loaded Strata/Ollama/DwarfStar models, but does not discover or stop every external GPU application. Readiness and live context are distinct from physical residency.
 
-Use **Reload context limits → Review context change → Apply context** only while Maya is ready and clients are idle. Odysseus checks model/context/version and the operational ceiling again in the worker, posts JSON to `/api/context` with Maya's matching Origin, and polls native reload/readiness. Maya attempts recovery on engine startup failure and saves successful changes to its run JSON. A failed save or recovery still requires log inspection; external native UI/config edits are not transactional with Odysseus. Stop making changes in the native UI during a reviewed operation.
+**Maya residency** sits beside **DwarfStar residency** on desktop and stacks on narrow screens. Its settings load automatically. Set **Maximum context (tokens)** and **DSpark speculative decoding → Off / On**, then choose **Review settings → Apply settings**. Editing either value invalidates the previous review. A running Maya service restarts, interrupting requests; a stopped service saves its settings without starting. Apply only when clients are idle. Settings use the same one-active-host-job queue as benchmarks and service controls; watch progress in **Scripts & TPS tests**.
 
-Cancelling/timing out a host context job does not cancel Maya's background reload. Inspect `/api/context`, `/health` and logs until settled before another job or service switch. A native systemctl start completing does not mean the model is ready; the Operations Maya startup job waits for readiness before finishing.
+Context can be raised from Operations beyond the original 4,096-token setting. A running service supplies the native context limit; stopped editing uses Maya's conservative 262,144-token fallback. This limit does not establish that a context fits in memory. The approved `maya_setup.maximum_context` value is raised when necessary and saved with the run config. Increase context in measured steps and check memory with sustained, uncached prompts.
+
+DSpark **On** saves `--dspark on` and requires MTP tensors in the selected pack's `tensors.txt`. It does not download or modify model artifacts. **Off** saves `--dspark none`, releasing drafter memory at the next managed restart. The existing non-speculative baseline is approximately 16.9 decode tokens/s; DSpark may improve or reduce throughput, so compare identical fixtures. After restarting, Operations verifies the model, context and drafter GPU residency; actual draft acceptance is measured by a benchmark.
+
+The worker checks the reviewed files again, backs up both JSON files under the host job's `maya-backup` directory, preserves other settings and attempts to restore the previous files and service state on failure or cancellation. Configuration edited externally during a job is never overwritten by automatic recovery. Inspect the job result and service logs if recovery is unverified. Keep Maya's native UI/config edits idle during an Operations change. Configs outside the managed local profile retain the older ready-only native context reload control; DSpark stays unavailable there, and cancelling that native reload job does not cancel Maya's background reload.
 
 For optional routing, append a deployment through **Models & routing**:
 
@@ -332,7 +339,7 @@ Save Maya `/metrics` and service logs before/after each isolated test, with `fre
 
 Only after a stable no-drafter baseline, stop Maya, back up its JSON and change its `args` pair `--dspark none` to `--dspark on` (the pinned engine's supported drafting mode). Confirm the packed drafter is the XS pair and available physical/GPU headroom remains sufficient. Restart, repeat with a new result name and record the exact args. If the pinned engine rejects that mode, stop and inspect its `--help` rather than borrowing DwarfStar flags. Do not run auto-calibration while other models or host jobs are active.
 
-For deeper prompts, first prove 4K, then raise `maya_setup.maximum_context` deliberately and test in steps using identical fixtures and measured prompt-token counts on both engines. Check post-load and sustained-prompt memory at each step. The existing 1792738674 benchmark rejection was a host-operation rejection; this integration makes no claim about its cause or a 256K allocation failure.
+For deeper prompts, first prove 4K, then raise **Maximum context** in Operations deliberately and test in steps using identical fixtures and measured prompt-token counts on both engines. Check post-load and sustained-prompt memory at each step. The existing 1792738674 benchmark rejection was a host-operation rejection; this integration makes no claim about its cause or a 256K allocation failure.
 
 ## 8. Journal and rollback
 
