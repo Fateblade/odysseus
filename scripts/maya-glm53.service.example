@@ -1,0 +1,16 @@
+[Unit]
+Description=Experimental Maya GLM 5.3 Flash S v2
+After=network.target
+
+[Service]
+Type=simple
+WorkingDirectory=%h/project-maya-glm53
+ExecStartPre=/usr/bin/python3 /mnt/odysseus-fateblade/scripts/odysseus-maya-memory-check.py --minimum-available-gib 16
+ExecStart=%h/project-maya-glm53/.venv/bin/python -m serve.server --engine strata --config %h/project-maya-glm53/maya-maya-s-v2-iq2_xxs-hip.json --host 127.0.0.1 --port 8093
+Restart=no
+TimeoutStopSec=120
+KillMode=control-group
+UMask=0077
+
+[Install]
+WantedBy=default.target

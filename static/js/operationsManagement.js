@@ -1,5 +1,6 @@
-import { initializeBenchmark, setBenchmarkCatalog, refreshBenchmarkLimits } from './operationsBenchmark.js?v=20261024limits1';
-import { initializeScoreboard, refreshScoreboard } from './operationsScoreboard.js?v=20261024limits1';
+import { initializeMayaGlm, renderMayaGlm, configureMayaGlm, refreshMayaGlm, selectedGlmModel } from './operationsMayaGlm.js?v=20261024glm1';
+import { initializeBenchmark, setBenchmarkCatalog, refreshBenchmarkLimits } from './operationsBenchmark.js?v=20261024glm1';
+import { initializeScoreboard, refreshScoreboard } from './operationsScoreboard.js?v=20261024glm1';
 const el = id => document.getElementById(id);
 let active = null;
 let timer = null;
@@ -104,6 +105,7 @@ function renderResidency(data) {
       ['Accepted request names', dwarfstarAliases.join(', ')], ['Runtime allocation', 'Not reported']]);
   }
   dwarfstarLive.append(node('p', dwarfstar.message || 'DwarfStar status could not be read.', 'operations-muted'));
+  renderMayaGlm(data.maya_glm || {});
   const maya = data.maya || {};
   mayaAliases = maya.aliases || [];
   const mayaLive = el('operations-maya-live');
@@ -137,7 +139,7 @@ function renderResidency(data) {
     }));
   }
   const sampled = Number.isFinite(data.sampled_at) ? new Date(data.sampled_at * 1000).toLocaleTimeString() : 'Unknown';
-  for (const id of ['operations-strata-sampled', 'operations-ollama-sampled', 'operations-dwarfstar-sampled', 'operations-maya-sampled']) {
+  for (const id of ['operations-strata-sampled', 'operations-ollama-sampled', 'operations-dwarfstar-sampled', 'operations-maya-sampled', 'operations-maya-glm-sampled']) {
     el(id).textContent = `Last sampled: ${sampled}. Refreshes every 5 seconds while this tab is visible.`;
   }
 }
@@ -151,7 +153,7 @@ async function refreshResidency() {
   } catch (error) {
     if (version !== residencyVersion) return;
     renderResidency({ strata: { message: error.message } });
-    for (const id of ['operations-strata-sampled', 'operations-ollama-sampled', 'operations-dwarfstar-sampled', 'operations-maya-sampled']) el(id).textContent = `Live refresh failed: ${error.message}`;
+    for (const id of ['operations-strata-sampled', 'operations-ollama-sampled', 'operations-dwarfstar-sampled', 'operations-maya-sampled', 'operations-maya-glm-sampled']) el(id).textContent = `Live refresh failed: ${error.message}`;
   }
 }
 
@@ -301,6 +303,7 @@ function initialize() {
   mayaContext.addEventListener('input', () => { mayaReview = null; mayaApply.disabled = true; mayaChange.hidden = true; });
   mayaDrafting.addEventListener('change', () => { mayaReview = null; mayaApply.disabled = true; mayaChange.hidden = true; });
   maya.append(mayaStatus, button('Reload settings', () => task(loadMaya)), mayaFields);
+  initializeMayaGlm(content, { section, field, button, node, task, request, manage, refreshResidency, confirmOperation, started: async result => { selectedJob = result.job.id; await refreshJobs(); status('GLM context job queued.'); } });
   const dwarfstar = section(content, 'DwarfStar residency', 'DeepSeek V4 Flash is selected when the server starts. Starting loads the model; stopping releases it and interrupts requests. First unload Strata and Ollama models. Other backends are never stopped automatically.', 'operations-dwarfstar-residency');
   const dwarfstarLive = node('div', 'Reading live status…');
   dwarfstarLive.id = 'operations-dwarfstar-live';
@@ -441,7 +444,7 @@ function initialize() {
   jobsContent.hidden = true;
   jobs.append(jobsContent);
   initializeBenchmark(jobsContent, { section, field, button, request, task, confirmOperation, suggestions: suggestions.id,
-    modelForBackend: backend => backend === 'strata' ? strataState?.active_model : backend === 'maya' ? mayaAliases[0] || 'deepseek-v4.1-flash' :
+    modelForBackend: backend => backend === 'maya_glm' ? selectedGlmModel() : backend === 'strata' ? strataState?.active_model : backend === 'maya' ? mayaAliases[0] || 'deepseek-v4.1-flash' :
       backend === 'dwarfstar' ? dwarfstarAliases.find(name => name === 'deepseek-v4-flash') || dwarfstarAliases[0] || 'deepseek-v4-flash' : null,
     started: async result => { selectedJob = result.job.id; await refreshJobs(); status('Benchmark started.'); } });
   initializeScoreboard(jobsContent, { section, field, button, request, task, inspect: async id => { selectedJob = id; await refreshDetail(); el('operations-job-output').scrollIntoView({ block: 'nearest' }); } });
@@ -513,6 +516,7 @@ async function refreshManagement() {
   el('operations-management-content').hidden = false;
   options(el('operations-docker-name'), result.containers || []);
   const services = result.services || {};
+  configureMayaGlm(services);
   for (const operation of ['start', 'stop']) el(`operations-dwarfstar-${operation}`).disabled = !Object.hasOwn(services, 'dwarfstar');
   for (const operation of ['start', 'stop']) el(`operations-maya-${operation}`).disabled = !Object.hasOwn(services, 'maya');
   const missing = result.unconfigured_services || [];
@@ -538,6 +542,7 @@ async function refreshManagement() {
   if (!dwarfstarState || (!dwarfstarDraft && !dwarfstarReview)) await loadDwarfstar();
   const mayaDraft = mayaState && (Number(el('operations-maya-context').value) !== (mayaState.configured_context ?? mayaState.active_context) || (el('operations-maya-drafting').value === 'On') !== Boolean(mayaState.drafting));
   if (!mayaState || (!mayaDraft && !mayaReview)) await loadMaya();
+  await refreshMayaGlm();
   await refreshResidency();
 }
 
@@ -672,6 +677,7 @@ async function poll() {
       if (!draft && !dwarfstarReview) await loadDwarfstar();
       const mayaDraft = mayaState && (Number(el('operations-maya-context').value) !== (mayaState.configured_context ?? mayaState.active_context) || (el('operations-maya-drafting').value === 'On') !== Boolean(mayaState.drafting));
       if (!busy && !mayaDraft && !mayaReview) await loadMaya();
+      await refreshMayaGlm();
     }
   }
   catch (error) { status(error.message, true); }

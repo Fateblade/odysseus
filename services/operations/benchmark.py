@@ -71,7 +71,7 @@ def sample(management, specification):
 def _sample(management, specification):
     backend = specification["backend"]
     ollama = backend == "ollama"
-    endpoints = {"ollama": management.ollama_url, "strata": management.strata_url, "dwarfstar": management.dwarfstar_url, "maya": management.maya_url}
+    endpoints = {"ollama": management.ollama_url, "strata": management.strata_url, "dwarfstar": management.dwarfstar_url, "maya": management.maya_url, "maya_glm": getattr(management, "maya_glm_url", "")}
     base = endpoints.get(backend)
     if not base:
         raise RuntimeError("The benchmark backend is not configured.")
@@ -83,7 +83,7 @@ def _sample(management, specification):
                        max_tokens=specification["max_tokens"], temperature=0, seed=42, stream_options={"include_usage": True})
     if backend == "dwarfstar":
         payload["think"] = False
-    if backend == "maya":
+    if backend in ("maya", "maya_glm"):
         payload["reasoning_effort"] = "none"
     request = Request(base.rstrip("/") + ("/api/generate" if ollama else "/v1/chat/completions"),
                       data=json.dumps(payload).encode(), headers={"Content-Type": "application/json"})
@@ -190,7 +190,7 @@ def run(management, specification):
             "task_summaries": {family: {"runs": sum(row["task"]["family"] == family for row in samples),
                                "summary": summarize([row for row in samples if row["task"]["family"] == family])} for family in families},
             "environment": environment, "prompt_sha256": fingerprints[0] if len(set(fingerprints)) == 1 else None,
-            "thinking": False if specification["backend"] in ("dwarfstar", "maya") else "backend default",
+            "thinking": False if specification["backend"] in ("dwarfstar", "maya", "maya_glm") else "backend default",
             "note": "Warmup is excluded; caches are not cleared. Distinct tasks reduce shared prompt reuse but do not guarantee cache-free runs. Mixed-task medians combine different workloads. End-to-end TPS includes load, queue and prefill; unavailable timings stay null."}
 
 
@@ -198,7 +198,7 @@ def snapshot(management, specification):
     """Read settings outside the timed request; missing metadata never fails a run."""
     from services.operations import overview
     from services.operations.dwarfstar import inventory
-    from services.operations.maya import inventory as maya_inventory
+    from services.operations.maya import inventory as maya_inventory, glm_inventory
     from pathlib import Path
     environment = {"sampled_at": time.time(), "system": platform.system(), "kernel": platform.release(),
                    "machine": platform.machine(), "context_tokens": None, "model_size_bytes": None}
@@ -215,7 +215,8 @@ def snapshot(management, specification):
                                    model_size_source="Ollama installed artifact")
         else:
             data = (inventory(management.dwarfstar_url) if backend == "dwarfstar" else
-                    maya_inventory(management.maya_url) if backend == "maya" else overview.strata(management.strata_url))
+                    maya_inventory(management.maya_url) if backend == "maya" else
+                    glm_inventory(management.maya_glm_url) if backend == "maya_glm" else overview.strata(management.strata_url))
             environment.update(context_tokens=data.get("max_context"), reported_model=data.get("model"),
                                engine_version=data.get("version"))
         environment["memory_after_sample"] = overview.memory()

@@ -32,9 +32,9 @@ def maya_server():
             requests.append((self.path, None))
             if self.path == "/health":
                 value = {"status": state["health"], "unloaded": state["unloaded"], "max_context": state["context"],
-                         "model": MODEL, "version": "1.1.22"}
+                         "model": state.get("model", MODEL), "version": "1.1.22"}
             elif self.path == "/v1/models":
-                value = {"data": [{"id": MODEL, "status": {"value": "unloaded" if state["unloaded"] else "loaded"},
+                value = {"data": [{"id": state.get("model", MODEL), "status": {"value": "unloaded" if state["unloaded"] else "loaded"},
                                    "meta": {"n_ctx": state["context"]}}]}
             elif self.path == "/api/context":
                 value = {"context": state["context"], "min": 1024, "max": 1048576, "reload": state["reload"]}
@@ -294,3 +294,89 @@ def test_real_helper_reads_selected_context_and_exact_budget_without_generation(
                                                       "prompt": "Example", "runs": 1, "warmup": True}))
     assert result["context_tokens"] == 128000 and result["max_output_tokens"] == 127979 and result["exact"]
     assert [path for path, body in requests if body is not None] == ["/api/tokens"]
+
+
+
+def test_glm_profile_transport_and_exact_limits_do_not_replace_ds41f(maya_server, tmp_path):
+    base, requests, state = maya_server
+    state["model"] = "glm-5.3-flash"
+    settings = tmp_path / "management.json"
+    settings.write_text(json.dumps({"maya_glm_setup": {"maximum_context": 32768},
+                                   "maya_setup": {"config_file": "/must/not/read/ds41f.json"}}))
+    host = HostOperations({"ODYSSEUS_OPERATIONS_HOST_HELPER": str(ROOT / "scripts/odysseus-litellm.py"),
+                           "ODYSSEUS_OPERATIONS_MANAGEMENT_CONFIG": str(settings),
+                           "ODYSSEUS_OPERATIONS_MAYA_GLM_URL": base})
+    residency = asyncio.run(host.run("residency"))
+    assert residency["maya_glm"]["model"] == "glm-5.3-flash"
+    assert residency["maya"]["status"] == "disabled"
+    config = asyncio.run(host.run("maya_glm_config"))
+    assert config["configured"] and config["maximum_context"] == 32768
+    budget = asyncio.run(host.run("benchmark_limits", {"backend": "maya_glm", "model": "glm-5.3-flash",
+                                                        "validate_tasks": True, "prompt": "Example", "runs": 1}))
+    assert budget["exact"] and budget["max_output_tokens"] == 4096 - 13 - 8
+    assert [path for path, body in requests if body is not None] == ["/api/tokens"]
+
+
+def test_glm_worker_uses_isolated_endpoint_native_counts_and_audit(maya_server, tmp_path):
+    base, requests, state = maya_server
+    state["model"] = "glm-5.3-flash"
+    settings = tmp_path / "management.json"
+    settings.write_text(json.dumps({"audit_directory": str(tmp_path / "audit")}))
+    specification = {"kind": "benchmark", "backend": "maya_glm", "model": "glm-5.3-flash", "prompt": "GLM task",
+                     "runs": 1, "max_tokens": 32, "warmup": False}
+    (tmp_path / "job.json").write_text(json.dumps({"specification": specification}))
+    process = subprocess.run([sys.executable, str(ROOT / "scripts/odysseus-operations-worker.py"), str(tmp_path),
+                              str(settings), "http://127.0.0.1:1", "http://127.0.0.1:1", "--maya-glm-url", base, "--execute"],
+                             capture_output=True, text=True, timeout=20)
+    assert process.returncode == 0, process.stdout + process.stderr
+    result = json.loads((tmp_path / "result.json").read_text())
+    assert result["backend"] == "maya_glm" and result["thinking"] is False
+    assert result["samples"][0]["output_tokens"] == 8 and result["samples"][0]["decode_tps"] == 12.5
+    assert requests[0][1]["reasoning_effort"] == "none"
+    assert '"backend": "maya_glm"' in "".join(path.read_text() for path in (tmp_path / "audit").glob("*.jsonl"))
+
+
+def test_glm_context_reload_changes_only_its_native_endpoint(maya_server, tmp_path):
+    base, requests, state = maya_server
+    state["model"] = "glm-5.3-flash"
+    settings = tmp_path / "management.json"
+    settings.write_text(json.dumps({"maya_glm_setup": {"maximum_context": 32768}}))
+    management = Management(str(settings), "", "", "", "", base)
+    current = maya_config.snapshot(management, backend="maya_glm")
+    reviewed = maya_config.review(management, {"revision": current["revision"], "context": 8192}, backend="maya_glm")
+    result = maya_config.run(management, {**reviewed, "backend": "maya_glm"}, tmp_path)
+    assert result["active_context"] == 8192
+    assert ("/api/context", {"max_context": 8192}) in requests
+    assert management.maya_url == ""
+
+
+@pytest.mark.parametrize("backend,other", [("maya", "maya_glm"), ("maya_glm", "maya")])
+def test_maya_profiles_refuse_to_start_over_each_other(backend, other):
+    def forbidden(*args, **kwargs):
+        pytest.fail("No competing service may be stopped automatically")
+    live = {"strata": {}, "ollama": {}, "dwarfstar": {}, other: {"loaded": True}}
+    management = SimpleNamespace(maya_url="http://ds", maya_glm_url="http://glm", residency=lambda: live, service=forbidden)
+    with pytest.raises(OperationsError, match="other Maya"):
+        maya.run_service(management, {"backend": backend, "operation": "start"})
+
+
+def test_glm_profile_rejects_shared_endpoint_and_unit(tmp_path):
+    with pytest.raises(OperationsError, match="own endpoint"):
+        Management(None, "", "", "", "http://native", "http://native/")
+    settings = tmp_path / "management.json"
+    settings.write_text(json.dumps({"services": {"maya": "same.service", "maya_glm": "same.service"}}))
+    with pytest.raises(OperationsError, match="different systemd units"):
+        Management(str(settings), "", "", "", "http://ds", "http://glm")
+
+
+def test_glm_discovery_rejects_deepseek_on_the_glm_profile(maya_server):
+    base, requests, state = maya_server
+    result = maya.glm_inventory(base)
+    assert result["status"] == "degraded" and result["loaded"] is True
+
+
+
+def test_glm_management_actions_keep_profile_attribution():
+    from services.operations.audit import request_fields
+    assert request_fields({"target": "service", "name": "maya_glm", "operation": "start"})["backend"] == "maya_glm"
+    assert request_fields({"action": "maya_glm_apply", "context": 8192})["backend"] == "maya_glm"

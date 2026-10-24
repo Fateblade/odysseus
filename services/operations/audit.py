@@ -151,7 +151,9 @@ def request_fields(payload):
     fields = {key: payload.get(key) for key in ("backend", "model", "context", "operation", "name", "destination")}
     fields["action"] = payload.get("action") or payload.get("kind")
     if payload.get("target"):
-        fields["backend"] = payload["target"]
+        fields["backend"] = payload["name"] if payload["target"] == "service" and payload.get("name") in ("maya", "maya_glm") else payload["target"]
+    elif str(payload.get("action", "")).startswith("maya_glm_"):
+        fields["backend"] = "maya_glm"
     return fields
 
 
@@ -159,7 +161,7 @@ def run_operation(management, payload, operation):
     actor = payload.get("_audit", {})
     actor = actor if isinstance(actor, dict) else {}
     management.audit_actor = {key: actor.get(key) for key in ("actor", "client_ip", "user_agent", "request_id")}
-    changes = {"manage", "apply", "job_start", "job_cancel", "script_save", "strata_apply", "dwarfstar_apply", "maya_apply", "measurement_import"}
+    changes = {"manage", "apply", "job_start", "job_cancel", "script_save", "strata_apply", "dwarfstar_apply", "maya_apply", "maya_glm_apply", "measurement_import"}
     if payload.get("action") not in changes:
         return operation()
     fields = {**request_fields(payload), **management.audit_actor, "source": "operations"}

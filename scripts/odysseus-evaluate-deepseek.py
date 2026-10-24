@@ -63,7 +63,7 @@ def tool_check(base, backend, model):
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--backend", choices=("maya", "dwarfstar"), required=True)
+    parser.add_argument("--backend", choices=("maya", "maya_glm", "dwarfstar"), required=True)
     parser.add_argument("--base-url", required=True, help="Native loopback endpoint without /v1")
     parser.add_argument("--model", required=True)
     parser.add_argument("--label", required=True, help="Checkpoint, quantization, engine SHA, context and drafting mode")
@@ -75,7 +75,8 @@ def main():
     os.umask(0o077)
     management = Management(args.management_config, "", "",
                             dwarfstar_url=args.base_url if args.backend == "dwarfstar" else "",
-                            maya_url=args.base_url if args.backend == "maya" else "")
+                            maya_url=args.base_url if args.backend == "maya" else "",
+                            maya_glm_url=args.base_url if args.backend == "maya_glm" else "")
     result = {"backend": args.backend, "model": args.model, "label": args.label, "fixtures": []}
     try:
         for prompt in FIXTURES:

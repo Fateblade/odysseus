@@ -22,7 +22,8 @@ export function initializeBenchmark(parent, { section, field, button, request, t
   const card = section(parent, 'TPS benchmark', 'Compare reproducible workloads. Native decode TPS uses backend timings; end-to-end TPS includes loading, queueing and prefill. Caches are not cleared.', 'operations-benchmark');
   const form = document.createElement('form'); form.addEventListener('submit', event => event.preventDefault()); card.append(form);
   const grid = document.createElement('div'); grid.className = 'operations-grid'; form.append(grid);
-  const backend = field(grid, 'operations-benchmark-backend', 'Backend', 'ollama', ['ollama', 'strata', 'dwarfstar', 'maya']);
+  const backend = field(grid, 'operations-benchmark-backend', 'Backend', 'ollama', ['ollama', 'strata', 'dwarfstar', 'maya', 'maya_glm']);
+  backend.options[backend.options.length - 1].textContent = 'Maya GLM';
   const model = field(grid, 'operations-benchmark-model', 'Model name (1–512 characters, no whitespace)');
   model.required = true; model.maxLength = 512; model.pattern = '\\S+'; model.setAttribute('list', suggestions);
   backend.addEventListener('change', () => { const selected = modelForBackend(backend.value); if (selected) model.value = selected; });

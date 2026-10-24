@@ -2,21 +2,13 @@
 """Verify local XS artifacts against pinned publisher sizes and SHA-256 hashes."""
 
 import argparse
-import hashlib
+import sys
 import json
 from pathlib import Path
 
 
-def verify(root, manifest):
-    for name, expected in manifest["files"].items():
-        path = root / name
-        if not path.is_file() or path.stat().st_size != expected["bytes"]:
-            raise ValueError(f"Missing or incorrect size: {name}")
-        with path.open("rb") as stream:
-            actual = hashlib.file_digest(stream, "sha256").hexdigest()
-        if actual != expected["sha256"]:
-            raise ValueError(f"SHA-256 mismatch: {name}")
-        print(f"Verified {name}", flush=True)
+sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+from services.operations.model_artifacts import verify
 
 
 def main():

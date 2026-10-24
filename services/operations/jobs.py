@@ -99,7 +99,7 @@ def enqueue(management, specification):
         try:
             with (folder / "worker.log").open("wb") as log:
                 subprocess.Popen([sys.executable, str(worker), str(folder), str(management.path or ""), management.strata_url, management.ollama_url,
-                                  "--dwarfstar-url", management.dwarfstar_url, "--maya-url", management.maya_url],
+                                  "--dwarfstar-url", management.dwarfstar_url, "--maya-url", management.maya_url, "--maya-glm-url", management.maya_glm_url],
                                  stdin=subprocess.DEVNULL, stdout=log, stderr=log, start_new_session=True, close_fds=True)
         except OSError:
             write_json(folder / "job.json", {**record, "state": "failed", "error": "Could not start host worker."})
@@ -159,11 +159,11 @@ def execute(management, payload):
         if payload.get("kind") == "benchmark":
             from services.operations.management import model_name
             backend = payload.get("backend")
-            if backend not in ("ollama", "strata", "dwarfstar", "maya"):
-                raise OperationsError("Choose Ollama, Strata, DwarfStar or Maya.")
+            if backend not in ("ollama", "strata", "dwarfstar", "maya", "maya_glm"):
+                raise OperationsError("Choose Ollama, Strata, DwarfStar, Maya DS41F or Maya GLM.")
             if backend == "dwarfstar" and not management.dwarfstar_url:
                 raise OperationsError("Configure the DwarfStar endpoint on the host helper first.", 503)
-            if backend == "maya" and not management.maya_url:
+            if backend in ("maya", "maya_glm") and not getattr(management, backend + "_url", ""):
                 raise OperationsError("Configure the Maya endpoint on the host helper first.", 503)
             from services.operations.benchmark_tasks import plan, MAX_RUNS, MAX_OUTPUT_TOKENS
             runs, tokens = payload.get("runs", 3), payload.get("max_tokens", 256)

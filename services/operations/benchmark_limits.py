@@ -11,8 +11,9 @@ def limits(management, payload, workload=None):
     from services.operations import overview, dwarfstar, maya
     backend, model = payload.get("backend"), model_name(payload.get("model"))
     context, reported_model = None, None
-    if backend == "maya":
-        live = maya.inventory(getattr(management, "maya_url", ""))
+    if backend in ("maya", "maya_glm"):
+        probe = maya.glm_inventory if backend == "maya_glm" else maya.inventory
+        live = probe(getattr(management, backend + "_url", ""))
     elif backend == "dwarfstar":
         live = dwarfstar.inventory(getattr(management, "dwarfstar_url", ""))
     elif backend == "strata":
@@ -24,12 +25,14 @@ def limits(management, payload, workload=None):
             context, reported_model = rows[0].get("context_length"), rows[0].get("name")
     else:
         raise OperationsError("Choose a configured benchmark backend.")
+    if backend == "maya_glm" and live.get("loaded") and live.get("model") != "glm-5.3-flash":
+        raise OperationsError("The GLM profile is serving another model. Check the isolated endpoint.", 409)
     if backend != "ollama" and live.get("status") == "ok" and live.get("loaded") is not False:
         if live.get("aliases") and model not in live["aliases"]:
             raise OperationsError("The selected model is not the model currently served by this backend.", 409)
         context, reported_model = live.get("max_context"), live.get("model")
     context = context if type(context) is int and context > 0 else None
-    reserve = MAYA_RESERVE_TOKENS if backend == "maya" else 0
+    reserve = MAYA_RESERVE_TOKENS if backend in ("maya", "maya_glm") else 0
     maximum = min(MAX_OUTPUT_TOKENS, max(0, context - reserve - 1)) if context else MAX_OUTPUT_TOKENS
     result = {"backend": backend, "model": model, "reported_model": reported_model, "context_tokens": context,
               "reserve_tokens": reserve, "max_output_tokens": maximum, "prompt_tokens": None, "exact": False,
@@ -42,7 +45,7 @@ def limits(management, payload, workload=None):
         workload = plan(payload, runs)
     if workload is not None:
         result["task_seed"] = workload.get("task_seed")
-    if backend == "maya" and context and workload is not None:
+    if backend in ("maya", "maya_glm") and context and workload is not None:
         tasks = list(workload["tasks"])
         if payload.get("warmup", True):
             tasks.append(workload["warmup_task"])
@@ -51,7 +54,7 @@ def limits(management, payload, workload=None):
             fingerprint = item["prompt_sha256"]
             if fingerprint in counts:
                 continue
-            counted = api(management.maya_url, "/api/tokens", {"model": model,
+            counted = api(getattr(management, backend + "_url"), "/api/tokens", {"model": model,
                           "messages": [{"role": "user", "content": item["prompt"]}], "reasoning_effort": "none"})
             if counted.get("max_context") != context:
                 raise OperationsError("Maya context changed while checking task limits. Check again.", 409)

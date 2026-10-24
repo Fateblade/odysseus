@@ -259,6 +259,12 @@ function render(data) {
     card.append(facts([['Context tokens', maya.max_context], ['Version', maya.version]]), action('Manage Maya', 'management'));
     services.append(card);
   }
+  if (data.maya_glm?.configured) {
+    const glm = data.maya_glm;
+    const card = service('Maya GLM', glm.status === 'ok' ? 'Ready' : glm.status === 'unloaded' ? 'Unloaded' : 'Unavailable', glm.status, glm.model || glm.message);
+    card.append(facts([['Context tokens', glm.max_context], ['Version', glm.version]]), action('Manage GLM', 'management'));
+    services.append(card);
+  }
   const lite = data.litellm || {};
   const gateway = service('LiteLLM', lite.status === 'ok' ? 'Ready' : text(lite.status), lite.status, 'Inference gateway');
   gateway.append(node('p', lite.message || 'Model aliases, routing and fallbacks.', 'operations-muted'), action('Edit models and routing', 'litellm'));

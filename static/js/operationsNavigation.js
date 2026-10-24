@@ -9,7 +9,7 @@ const sections = {
   management: [
     ['containers', 'Containers', '.operations-control-docker'], ['servers', 'Inference servers', '.operations-control-service'],
     ['strata', 'Strata residency', '.operations-strata-residency'], ['ollama', 'Ollama residency', '.operations-ollama-residency'],
-    ['maya', 'Maya residency', '.operations-maya-residency'],
+    ['maya', 'Maya DS41F', '.operations-maya-residency'], ['maya-glm', 'Maya GLM', '.operations-maya-glm-residency'],
     ['dwarfstar', 'DwarfStar residency', '.operations-dwarfstar-residency'],
     ['configuration', 'Strata configuration', '.operations-strata-configuration'], ['models', 'Ollama models', '.operations-ollama-control'],
     ['output', 'Logs & details', '.operations-command-output'],

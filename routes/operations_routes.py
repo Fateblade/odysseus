@@ -123,6 +123,18 @@ def setup_operations_routes(service=None):
     async def apply_strata_config(request: Request):
         return await invoke(request, "strata_apply")
 
+    @router.get("/maya-glm/config")
+    async def get_maya_glm_config(request: Request):
+        return await invoke(request, "maya_glm_config")
+
+    @router.post("/maya-glm/preview")
+    async def preview_maya_glm_config(request: Request):
+        return await invoke(request, "maya_glm_preview")
+
+    @router.post("/maya-glm/apply")
+    async def apply_maya_glm_config(request: Request):
+        return await invoke(request, "maya_glm_apply")
+
     @router.get("/maya/config")
     async def get_maya_config(request: Request):
         return await invoke(request, "maya_config")

@@ -23,8 +23,9 @@ export function initializeScoreboard(parent, helpers) {
   api = request; runTask = task; inspectJob = inspect;
   const card = section(parent, 'Model measurement scoreboard', 'Saved on the inference host. Medians exclude warmup. Compare matching prompts, token counts, context, quantization and hardware. End-to-end TPS includes prefill and queueing; it is separate from native decode TPS.', 'operations-scoreboard');
   const grid = make('div'); grid.className = 'operations-grid'; card.append(grid);
-  const backend = field(grid, 'scoreboard-backend', 'Backend filter', '', ['', 'ollama', 'strata', 'dwarfstar', 'maya']);
+  const backend = field(grid, 'scoreboard-backend', 'Backend filter', '', ['', 'ollama', 'strata', 'dwarfstar', 'maya', 'maya_glm']);
   backend.options[0].textContent = 'All backends';
+  backend.options[backend.options.length - 1].textContent = 'Maya GLM';
   const model = field(grid, 'scoreboard-model', 'Model filter');
   const sort = field(grid, 'scoreboard-sort', 'Order', 'created_at', ['created_at', 'end_to_end_tps', 'decode_tps', 'ttft_s']);
   ['Newest first', 'End-to-end TPS: highest first', 'Decode TPS: highest first', 'TTFT: lowest first'].forEach((text, i) => { sort.options[i].textContent = text; });
@@ -44,7 +45,8 @@ export function initializeScoreboard(parent, helpers) {
   const importer = make('details'); importer.append(make('summary', 'Import earlier TPS script JSON lines'));
   importer.append(make('p', 'Paste one measured run per line, excluding warmup. elapsed_s and output_tokens are required. Leave settings unknown unless recorded at the time. Imported context and artifact size are user supplied.'));
   const inputs = make('div'); inputs.className = 'operations-grid'; importer.append(inputs);
-  const source = field(inputs, 'scoreboard-import-backend', 'Backend', 'dwarfstar', ['dwarfstar', 'ollama', 'strata', 'maya']);
+  const source = field(inputs, 'scoreboard-import-backend', 'Backend', 'dwarfstar', ['dwarfstar', 'ollama', 'strata', 'maya', 'maya_glm']);
+  source.options[source.options.length - 1].textContent = 'Maya GLM';
   const name = field(inputs, 'scoreboard-import-model', 'Model name', 'deepseek-v4-flash');
   const context = field(inputs, 'scoreboard-import-context', 'Runtime context tokens (optional)', '', null, 'number');
   const size = field(inputs, 'scoreboard-import-size', 'Model artifacts GiB (optional; excludes runtime buffers)', '', null, 'number'); size.step = 'any';
