@@ -4,9 +4,46 @@ import hashlib
 import json
 import platform
 import time
+from urllib.error import HTTPError
 from urllib.request import Request, build_opener
 
 from services.operations.litellm_host import NoRedirect
+
+
+class BackendRequestError(RuntimeError):
+    def __init__(self, backend, status_code, detail, specification):
+        self.status_code = status_code
+        self.detail = detail
+        target = f"HTTP {status_code}" if status_code else "stream error"
+        task = specification.get("benchmark_task_id", "custom")
+        message = (f"{backend} rejected benchmark {task} ({target}; output cap {specification['max_tokens']} tokens; "
+                   f"prompt {len(specification['prompt'])} characters).")
+        message += " " + (detail or "No structured error message was returned. Inspect the backend service log.")
+        if status_code == 400:
+            message += " Check the requested model, sampling parameters and input plus output against the runtime context."
+        super().__init__(message)
+
+
+def error_detail(value):
+    if not isinstance(value, dict):
+        return None
+    value = value.get("error") or value.get("detail") or value.get("message")
+    if isinstance(value, dict):
+        value = value.get("message")
+    return " ".join(value.split())[:2048] if isinstance(value, str) else None
+
+
+def http_rejection(error, backend, specification):
+    detail = None
+    try:
+        raw = error.read(16385)
+        if len(raw) <= 16384:
+            detail = error_detail(json.loads(raw))
+    except (OSError, ValueError, UnicodeError):
+        pass
+    finally:
+        error.close()
+    return BackendRequestError(backend, error.code, detail, specification)
 
 
 def sample(management, specification):
@@ -20,7 +57,10 @@ def sample(management, specification):
     try:
         result = _sample(management, specification)
     except Exception as error:
-        emit(directory(management), "request.failed", **fields, error_type=type(error).__name__)
+        emit(directory(management), "request.failed", **fields, error_type=type(error).__name__,
+             status_code=getattr(error, "status_code", None),
+             content={"backend_error": error.detail, "task_id": specification.get("benchmark_task_id")}
+             if isinstance(error, BackendRequestError) and management.settings.get("audit_capture_content", True) else None)
         raise
     emit(directory(management), "request.succeeded", **fields, prompt_tokens=result["prompt_tokens"],
          output_tokens=result["output_tokens"], duration_ms=result["elapsed_s"] * 1000,
@@ -51,7 +91,11 @@ def _sample(management, specification):
     first, usage, final, timings = None, {}, {}, {}
     captured, captured_size = [], 0
     completed = False
-    with build_opener(NoRedirect()).open(request, timeout=300) as response:
+    try:
+        response = build_opener(NoRedirect()).open(request, timeout=300)
+    except HTTPError as error:
+        raise http_rejection(error, backend, specification) from None
+    with response:
         while raw := response.readline(1024 * 1024 + 1):
             if len(raw) > 1024 * 1024:
                 raise RuntimeError("Benchmark response line exceeded 1 MiB.")
@@ -66,7 +110,7 @@ def _sample(management, specification):
                     break
             event = json.loads(raw)
             if event.get("error"):
-                raise RuntimeError("Benchmark backend returned an error.")
+                raise BackendRequestError(backend, None, error_detail(event), specification)
             if ollama:
                 emitted = event.get("response") or event.get("thinking")
                 if event.get("done"):
@@ -120,7 +164,7 @@ def run(management, specification):
                    "prompt_sha256": hashlib.sha256(specification["prompt"].encode()).hexdigest()}
     tasks = specification.get("tasks") or [legacy_task] * specification["runs"]
     def measure(item):
-        result = sample(management, {**specification, "prompt": item["prompt"]})
+        result = sample(management, {**specification, "prompt": item["prompt"], "benchmark_task_id": item["id"]})
         result["task"] = {key: value for key, value in item.items() if key != "prompt"}
         return result
     warmup = None

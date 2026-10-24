@@ -35,3 +35,10 @@ The later 15.41 TPS result at 262144 allocated context was reported only as a su
 ## Update the deployment
 
 Deploy the updated dashboard and host helper from the same revision using the existing rebuild procedure. No extra database or package is needed. Existing jobs_directory settings are reused. Scoreboard reads do not load a model or make inference requests. Only a newly started benchmark queries the selected backend; runtime metadata is collected outside the timed sample.
+
+
+## Diagnose rejected benchmark requests
+
+An HTTP 400 during warmup means the backend rejected that request before measured runs began. Job output reports the backend, task ID, output cap, prompt character count and bounded structured error message. The request journal also retains the HTTP status and, when content capture is enabled, the backend explanation. Opaque HTML responses and oversized bodies are not dumped into the log.
+
+Maya rejects a request when the prompt plus output cap and its engine reserve exceed runtime context. The benchmark's 262,144-token output ceiling does not allocate more context: that cap cannot fit alongside any input in a 262,144-token runtime context. Start with Code review, Small, and 512 output tokens, then increase workload size or output budget within the active context. A Large prompt may itself exceed smaller contexts even with a low output cap. Use Management to review and change runtime context when needed; the benchmark does not resize it automatically.

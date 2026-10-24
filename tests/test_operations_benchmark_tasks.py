@@ -122,3 +122,53 @@ def test_task_set_seed_replays_sources_and_fresh_default_changes_them(monkeypatc
     assert fresh["tasks"][0]["prompt_sha256"] != first["tasks"][0]["prompt_sha256"]
     with pytest.raises(OperationsError):
         benchmark_tasks.plan({**payload, "task_seed": 2147483648}, 3)
+
+
+
+@pytest.mark.parametrize("body,detail", [
+    ({"error": {"message": "prompt (1000 tokens) + max tokens (262144) exceeds the context (4096)"}}, "exceeds the context"),
+    ({"error": "Unknown model"}, "Unknown model"),
+    ({"detail": "Unsupported sampling field"}, "Unsupported sampling field")])
+def test_http_rejection_preserves_structured_reason_without_endpoint_or_headers(monkeypatch, body, detail):
+    import io
+    from urllib.error import HTTPError
+    def rejected(*args, **kwargs):
+        raise HTTPError("http://secret-user:secret-password@native/v1/chat/completions", 400, "Bad Request",
+                        {"Authorization": "Bearer private-token"}, io.BytesIO(json.dumps(body).encode()))
+    monkeypatch.setattr(benchmark, "build_opener", lambda *_: SimpleNamespace(open=rejected))
+    management = SimpleNamespace(settings={}, ollama_url="", strata_url="", dwarfstar_url="", maya_url="http://native")
+    with pytest.raises(benchmark.BackendRequestError) as caught:
+        benchmark._sample(management, {"backend": "maya", "model": "test", "prompt": "Example", "max_tokens": 262144,
+                                       "benchmark_task_id": "v2/research/small/123/3"})
+    text = str(caught.value)
+    assert detail in text and "HTTP 400" in text and "262144" in text and "v2/research" in text
+    assert "secret-password" not in text and "private-token" not in text
+    assert caught.value.status_code == 400
+
+
+@pytest.mark.parametrize("raw", [b'<html>private opaque error page</html>', b'x' * 17000])
+def test_http_rejection_does_not_dump_non_json_or_unbounded_body(raw):
+    import io
+    from urllib.error import HTTPError
+    error = HTTPError("http://native", 400, "Bad Request", {}, io.BytesIO(raw))
+    result = benchmark.http_rejection(error, "maya", {"prompt": "Example", "max_tokens": 256})
+    assert result.detail is None
+    assert "No structured error message" in str(result)
+    assert "private opaque" not in str(result)
+
+
+def test_failed_request_journal_preserves_status_and_backend_reason(tmp_path, monkeypatch):
+    from services.operations.audit import read
+    specification = {"backend": "maya", "model": "test", "prompt": "Example", "max_tokens": 262144}
+    def rejected(*args):
+        raise benchmark.BackendRequestError("maya", 400, "Output exceeds context", specification)
+    monkeypatch.setattr(benchmark, "_sample", rejected)
+    management = SimpleNamespace(settings={"audit_directory": str(tmp_path)})
+    with pytest.raises(benchmark.BackendRequestError):
+        benchmark.sample(management, specification)
+    entries = read(tmp_path)["events"]
+    failed = next(row for row in entries if row["event"] == "request.failed")
+    assert failed["status_code"] == 400
+    from services.operations.audit import read as inspect
+    event = inspect(tmp_path, event_id=failed["id"])["event"]
+    assert event["content"]["backend_error"] == "Output exceeds context"
