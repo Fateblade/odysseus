@@ -76,7 +76,13 @@ Do not rerun the upstream installer for this step; it could regenerate the confi
 
 ## 5. Start and verify allocations before benchmarking
 
-Start **Maya GLM** in Management. Check the new engine log:
+Start **Maya GLM** in Management after confirming it was stopped. Replacing a binary or editing its config does not change an already-running engine. If it remained running during the rebuild, explicitly restart this service before checking allocations:
+
+```bash
+systemctl --user restart maya-glm53.service
+```
+
+An old engine can appear as `build-hip/maya (deleted)` in `/proc/PID/exe`, with its old environment still active. The first device retry encountered exactly this: the patched binary existed on disk and the setting was saved, but the original process still served requests. Restarting loaded the new binary and setting. Check the new engine log:
 
 ```bash
 cd "$HOME/project-maya-glm53"
@@ -90,6 +96,14 @@ Read the most recent startup, because the log appends prior attempts. It must in
 If the mode verification fails, preserve the exact error; do not disable its checks or force a larger memory cap. If it still reports an 8.28 GiB pool, verify the rebuilt binary is the one in the config and that the new setting reached it. If another pool cap remains configured, inspect it rather than clearing unrelated settings blindly.
 
 After readiness, repeat the original three-run Small/mixed/distinct-task benchmark at 8192 context and 256 output tokens, MTP still off. For the matched workload use task-set seed **1494806378**, temperature 0 and sampling seed 42. Mark the new scoreboard notes `reserved VRAM fix; MTP-off`; retain the historical 3 TPS baseline. Monitor `vmstat 1 10` while generating, GPU allocations, available RAM and logs. Compare native decode, prefill, TTFT and cache hit rate. Only after allocation and stability are satisfactory proceed to the separate MTP-on comparison in the main guide. No throughput improvement is promised before this device test.
+
+## Verified device result, 2026-10-25
+
+After the actual restart, the host built and ran the patch on the existing HIP 7.1 / clang 21 stack. The active PCI device was 0000:bd:00.0, with 96 GiB VRAM, 88.24 GiB free before the pool and 30.48 GiB Linux RAM. The expert pool reached 80.17 GiB, 288 slots/layer and 12,096 total slots. The engine confirmed all experts fit; the pinned RAM tier fell from 9.27 GiB to 0.22 GiB, staging only. The dashboard reported about 87 GiB GPU usage.
+
+Three Small/mixed/distinct runs at 8192 context, 256 output tokens, temperature 0, sampling seed 42 and MTP off measured native decode median **18.4 t/s**, prefill **177 t/s**, TTFT **6.204 s**, end-to-end **12.723 t/s**, elapsed **20.121 s**. Decode samples were 18.4, 18.4 and 18.3 t/s; warmup was 18.3. Prompt-cache counts and draft counts were zero. The post-run Linux memory snapshot reported 5.61 GiB used / 24.87 GiB available. Swap used was about 0.99 GiB, unchanged from the prior sample; this does not establish whether swapping occurred during requests.
+
+Relative to the first 3.0 t/s baseline this is about 6.1x native decode, 3.1x prefill and 5.2x end-to-end throughput. However, this successful export used task-set seed **1893222011**, not the original **1494806378**: it is a workload-class comparison, not identical prompts. Reuse **1893222011** for the next MTP-on comparison against this fixed baseline, with the same other settings. All answers reached the output cap, so task quality and longer-context stability remain separate acceptance work. These data do not establish the maximum context or MTP benefit.
 
 ## Roll back
 
