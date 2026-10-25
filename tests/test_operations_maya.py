@@ -22,6 +22,24 @@ ROOT = Path(__file__).resolve().parents[1]
 MODEL = "deepseek-v4.1-flash"
 
 
+@pytest.mark.parametrize("content, message", [
+    ('{"services": {},}\n', "invalid JSON at line 1"),
+    ('{}\n{"private": "do-not-expose"}', "invalid JSON at line 2"),
+    ('[]', "must be JSON objects"),
+    ('{"services": []}', "must be JSON objects"),
+    ('{"services": {"maya_glm": null}}', "unit-name string"),
+])
+def test_helper_reports_management_configuration_errors(tmp_path, content, message):
+    settings = tmp_path / "management.json"
+    settings.write_text(content, encoding="utf-8")
+    host = HostOperations({"ODYSSEUS_OPERATIONS_HOST_HELPER": str(ROOT / "scripts/odysseus-litellm.py"),
+                           "ODYSSEUS_OPERATIONS_MANAGEMENT_CONFIG": str(settings)})
+    with pytest.raises(OperationsError, match=message) as failure:
+        asyncio.run(host.run("management"))
+    assert failure.value.status == 503
+    assert "do-not-expose" not in str(failure.value)
+
+
 @pytest.fixture
 def maya_server():
     requests = []

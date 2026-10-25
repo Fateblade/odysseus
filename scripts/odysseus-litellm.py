@@ -44,8 +44,9 @@ def main():
         print(json.dumps(result))
     except OperationsError as error:
         print(json.dumps({"error": str(error), "status": error.status}))
-    except Exception:
-        print(json.dumps({"error": "The host operation failed. Check helper installation and host access.", "status": 502}))
+    except Exception as error:
+        error_type = type(error).__name__
+        print(json.dumps({"error": f"The host operation failed ({error_type}). Check helper installation and host access.", "error_type": error_type, "status": 502}))
 
 
 def dispatch_request(args, management, payload):

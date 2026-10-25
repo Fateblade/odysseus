@@ -210,6 +210,14 @@ If the optional residency monitor is installed, add `--maya-glm-url http://127.0
 
 ## 7. Stop competing models and prove small-context inference
 
+If Operations reports “The host operation failed”, this is a helper exception, not evidence of a model memory failure. First validate the host management file without printing its contents:
+
+```bash
+python3 -m json.tool "$HOME/.config/odysseus-operations/management.json" >/dev/null
+```
+
+A successful check prints nothing. A JSON error reports its line/column; merge the GLM entries into the existing object rather than appending a second JSON object. Current helpers report malformed configuration directly and include the exception type for unexpected failures. If the old generic wording persists after pulling and rebuilding, verify that the configured host helper actually points to the updated checkout. Do not paste `.env`, the full management file or credential-bearing logs when reporting the error.
+
 Use Management to unload Strata and all Ollama models, stop DwarfStar and stop Maya DS41F. Confirm their processes and allocations have actually fallen before loading GLM. Do not stop LiteLLM. The profile controls refuse a known competing Maya model and never stop it for you; direct manual systemd commands bypass that application guard.
 
 Start **Maya GLM** through Management. Inspect startup:

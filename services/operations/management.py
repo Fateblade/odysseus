@@ -37,7 +37,17 @@ def model_name(value):
 class Management:
     def __init__(self, settings_path, strata_url, ollama_url, dwarfstar_url="", maya_url="", maya_glm_url=""):
         self.path = Path(settings_path).expanduser() if settings_path else None
-        self.settings = json.loads(self.path.read_text()) if self.path and self.path.exists() else {}
+        try:
+            self.settings = json.loads(self.path.read_text(encoding="utf-8")) if self.path and self.path.exists() else {}
+        except json.JSONDecodeError as error:
+            raise OperationsError(f"Host management configuration is invalid JSON at line {error.lineno}, column {error.colno}. Check management.json.", 503) from None
+        except (OSError, UnicodeError):
+            raise OperationsError("Host management configuration cannot be read as UTF-8. Check management.json permissions and encoding for the helper user.", 503) from None
+        if not isinstance(self.settings, dict) or not isinstance(self.settings.get("services", {}), dict):
+            raise OperationsError("Host management configuration and its services entry must be JSON objects. Merge the GLM entries into the existing management.json object.", 503)
+        for setting in self.settings.get("services", {}).values():
+            if not isinstance(setting, (str, dict)):
+                raise OperationsError("Each host management service must be a unit-name string or an object containing unit and scope.", 503)
         self.strata_url = strata_url
         self.ollama_url = ollama_url
         self.dwarfstar_url = dwarfstar_url
