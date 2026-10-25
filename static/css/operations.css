@@ -254,3 +254,16 @@ body.operations-page { --operations-muted: color-mix(in srgb, var(--fg) 68%, var
 .operations-toggle input:disabled { opacity: .45; cursor: default; }
 @media (max-width: 1150px) { .operations-exclusive-grid { grid-template-columns: minmax(0, 1fr); } }
 @media (max-width: 700px) { .operations-shared-grid { grid-template-columns: minmax(0, 1fr); } }
+
+.operations-notifications { position: fixed; right: max(20px, env(safe-area-inset-right)); bottom: max(20px, env(safe-area-inset-bottom)); z-index: 1200; display: flex; flex-direction: column; gap: 12px; width: min(400px, calc(100vw - 32px)); max-height: calc(100dvh - 40px); overflow-y: auto; overscroll-behavior: contain; pointer-events: none; }
+.operations-notification { position: relative; flex: 0 0 auto; padding: 16px 44px 16px 18px; border: 1px solid var(--border); border-left: 3px solid var(--fg); border-radius: 6px; background: var(--bg); box-shadow: 0 8px 28px #0006; pointer-events: auto; overflow-wrap: anywhere; }
+.operations-notification strong { display: block; margin-bottom: 6px; font-size: 12px; }
+.operations-notification p { margin: 0; color: var(--fg); font-size: 12px; }
+.operations-notification-warning { border-left-color: var(--color-warning); }
+.operations-notification-warning strong { color: var(--color-warning); }
+.operations-notification-error { border-left-color: var(--color-error); }
+.operations-notification-error strong { color: var(--color-error); }
+.operations-page .operations-notification-close { position: absolute; top: 8px; right: 8px; display: grid; place-items: center; width: 32px; height: 32px; padding: 0; border: 0; border-radius: 4px; background: transparent; color: var(--fg); font-family: inherit; font-size: 20px; line-height: 1; cursor: pointer; }
+.operations-notification-close:hover { background: color-mix(in srgb, var(--fg) 10%, transparent); }
+.operations-notification-close:focus-visible { outline: 2px solid var(--fg); outline-offset: -2px; }
+@media (max-width: 700px) { .operations-notifications { right: 12px; bottom: max(12px, env(safe-area-inset-bottom)); width: calc(100vw - 24px); max-height: 60dvh; } }

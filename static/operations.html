@@ -27,7 +27,7 @@
   <link rel="stylesheet" href="/static/css/documents-gallery-editor.css?v=20260929csssplit">
   <link rel="stylesheet" href="/static/css/email-calendar-notes-tasks.css?v=20260929csssplit">
   <link rel="stylesheet" href="/static/css/cookbook-research-memory-settings.css?v=20260929csssplit">
-  <link rel="stylesheet" href="/static/css/operations.css?v=20261025engines1">
+  <link rel="stylesheet" href="/static/css/operations.css?v=20261025notifications1">
 </head>
 <body class="operations-page">
   <a class="operations-skip" href="#operations-workspace">Skip to content</a>
@@ -62,7 +62,7 @@
     <div class="operations-workspace" id="operations-workspace" tabindex="-1" role="region" aria-labelledby="operations-page-title">
     <div id="operations-overview-panel" class="operations-panel">
       <div class="operations-section-header"><h2>System readings</h2><button type="button" class="cookbook-btn" id="operations-refresh-overview">Refresh readings</button></div>
-      <p id="operations-overview-status" class="operations-status" role="status" aria-live="polite">Loading host overview…</p>
+      <p id="operations-overview-status" class="operations-status" hidden>Loading host overview…</p>
       <div id="operations-overview-content" hidden>
         <p id="operations-host-name" class="operations-muted"></p>
         <div id="operations-metrics" class="operations-metric-grid"></div>
@@ -81,7 +81,7 @@
     <div id="operations-management-panel" class="operations-panel" hidden></div>
     <div id="operations-jobs-panel" class="operations-panel" hidden></div>
     <div id="operations-audit-panel" class="operations-panel" hidden>
-      <p id="operations-audit-status" class="operations-status" role="status">Loading request journal…</p>
+      <p id="operations-audit-status" class="operations-status" hidden>Loading request journal…</p>
       <section class="operations-surface operations-audit-entries">
         <div class="operations-section-header"><h2>Recent entries</h2><button id="operations-audit-refresh" type="button" class="cookbook-btn">Refresh journal</button></div>
         <p class="operations-muted">Caller labels and forwarded addresses can be client-supplied. Shared API keys cannot identify individual applications reliably. Residency observations show changes, not proof of which request caused them. Requests bypassing the gateway need their own instrumentation.</p>
@@ -96,7 +96,7 @@
       <div class="cookbook-actions"><button class="cookbook-btn" id="operations-confirm-cancel" type="button">Cancel</button><button class="cookbook-btn cookbook-run-btn" id="operations-confirm-apply" type="button">Confirm</button></div>
     </dialog>
     <div id="operations-litellm-panel" class="operations-panel" hidden>
-    <p id="operations-status" class="operations-status" role="status" aria-live="polite"></p>
+    <p id="operations-status" class="operations-status" hidden></p>
     <section id="operations-setup" hidden>
       <h2>Connect the LiteLLM host</h2>
       <p>An administrator must configure host access before models and routing can be managed here.</p>
@@ -139,6 +139,6 @@
     </div>
     </div>
   </main>
-  <script type="module" src="/static/js/operations.js?v=20261025engines1"></script>
+  <script type="module" src="/static/js/operations.js?v=20261025notifications1"></script>
 </body>
 </html>

@@ -1,9 +1,10 @@
 import { selectResourcePanel } from './operationsResources.js?v=20261024resources1';
+import { notify } from './operationsNotifications.js?v=20261025notifications1';
 import { applyColors, applyFontDensity, getSaved } from './theme.js';
-import { closeOverview, openOverview } from './operationsOverview.js?v=20261025engines1';
-import { openManagement, closeManagement } from './operationsManagement.js?v=20261025engines1';
-import { showSections, panelForSectionHash } from './operationsNavigation.js?v=20261025engines1';
-import { openAudit } from './operationsAudit.js?v=20261022audit1';
+import { closeOverview, openOverview } from './operationsOverview.js?v=20261025notifications1';
+import { openManagement, closeManagement } from './operationsManagement.js?v=20261025notifications1';
+import { showSections, panelForSectionHash } from './operationsNavigation.js?v=20261025notifications1';
+import { openAudit } from './operationsAudit.js?v=20261025notifications1';
 
 const endpoint = '/api/operations/litellm';
 let state = null;
@@ -49,7 +50,7 @@ const names = () => [...new Set(state.draft.models.map(row => row.model_name).fi
 
 function message(text, error = false) {
   el('operations-status').textContent = text;
-  el('operations-status').classList.toggle('operations-error', error);
+  notify(text, { severity: error === true ? 'error' : error || 'status' });
 }
 
 function invalidate() {
@@ -247,7 +248,7 @@ async function load() {
     state = null;
     el('operations-content').hidden = true;
     el('operations-setup').hidden = false;
-    message(result.message);
+    message(result.message, 'warning');
     return;
   }
   state = result;

@@ -1,3 +1,4 @@
+import { notify, resetNotification } from './operationsNotifications.js?v=20261025notifications1';
 import { updateResources, markResourcesStale } from './operationsResources.js?v=20261024resources1';
 const el = id => document.getElementById(id);
 let timer = null;
@@ -288,7 +289,7 @@ function percentless(value) {
   return Number.isFinite(value) ? `${value.toFixed(1)} tok/s` : 'Unavailable';
 }
 
-async function refresh() {
+async function refresh(manual = false) {
   if (loading || !active || document.hidden) return;
   clearTimeout(timer);
   loading = true;
@@ -304,6 +305,8 @@ async function refresh() {
     if (!response.ok) throw new Error(data.detail || 'Host overview could not be read.');
     if (!data.configured) {
       markResourcesStale();
+      resetNotification('overview:request');
+      notify(data.message || 'Host not connected.', { severity: 'warning', key: 'overview:availability' });
       status.textContent = data.message;
       status.classList.remove('operations-error');
       el('operations-overview-content').hidden = true;
@@ -319,6 +322,13 @@ async function refresh() {
     const time = new Date(data.sampled_at * 1000).toLocaleTimeString();
     status.textContent = `${data.demo ? 'Preview data · ' : ''}Updated ${time}${unavailable.length ? ` · unavailable or incomplete: ${unavailable.join(', ')}` : ''}`;
     status.classList.toggle('operations-error', unavailable.length > 0);
+    resetNotification('overview:request');
+    if (manual) resetNotification('overview:availability');
+    if (unavailable.length) notify(`Host readings unavailable or incomplete: ${unavailable.join(', ')}`, { severity: 'warning', key: 'overview:availability' });
+    else {
+      resetNotification('overview:availability');
+      if (manual) notify('Host readings refreshed.');
+    }
     const connection = el('operations-connection');
     connection.textContent = data.demo ? 'Preview data' : unavailable.length ? 'Partial readings' : 'Host connected';
     connection.dataset.state = data.demo ? 'demo' : unavailable.length ? 'partial' : 'online';
@@ -326,6 +336,7 @@ async function refresh() {
     markResourcesStale();
     status.textContent = `${error.message} Previous readings, if shown, are stale.`;
     status.classList.add('operations-error');
+    notify(status.textContent, { severity: 'error', key: 'overview:request' });
     el('operations-connection').textContent = 'Readings stale';
     el('operations-connection').dataset.state = 'offline';
   } finally {
@@ -345,7 +356,7 @@ export function closeOverview() {
   clearTimeout(timer);
 }
 
-el('operations-refresh-overview').addEventListener('click', refresh);
+el('operations-refresh-overview').addEventListener('click', () => refresh(true));
 el('operations-open-containers').addEventListener('click', () => el('operations-management-tab').click());
 el('operations-open-models').addEventListener('click', () => el('operations-management-tab').click());
 el('operations-process-sort').addEventListener('change', () => processState && renderProcesses(processState));

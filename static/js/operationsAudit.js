@@ -1,3 +1,4 @@
+import { notify } from './operationsNotifications.js?v=20261025notifications1';
 const el = id => document.getElementById(id);
 let entries = [];
 let initialized = false;
@@ -42,7 +43,7 @@ function render() {
       try {
         const result = await request('audit/detail', { id: entry.id });
         if (version === sequence) el('operations-audit-detail').textContent = result.event ? JSON.stringify(result.event, null, 2) : result.message;
-      } catch (error) { if (version === sequence) el('operations-audit-detail').textContent = error.message; }
+      } catch (error) { if (version === sequence) { el('operations-audit-detail').textContent = error.message; notify(error.message, { severity: 'error' }); } }
     });
     action.append(inspect); row.append(action); body.append(row);
   }
@@ -58,8 +59,9 @@ async function refresh() {
     entries = result.events || [];
     el('operations-audit-status').textContent = result.message || 'Journal loaded.';
     if (result.configured === false) el('operations-audit-status').textContent = result.message || 'Connect the Linux host helper.';
+    notify(el('operations-audit-status').textContent, { severity: result.configured === false ? 'warning' : 'status' });
     render();
-  } catch (error) { el('operations-audit-status').textContent = error.message; }
+  } catch (error) { el('operations-audit-status').textContent = error.message; notify(error.message, { severity: 'error' }); }
   finally { loading = false; }
 }
 

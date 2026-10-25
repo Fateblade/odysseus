@@ -1,12 +1,12 @@
-import { initializeMayaGlm, renderMayaGlm, configureMayaGlm, refreshMayaGlm, selectedGlmModel } from './operationsMayaGlm.js?v=20261025engines1';
-import { initializeBenchmark, setBenchmarkCatalog, refreshBenchmarkLimits } from './operationsBenchmark.js?v=20261025engines1';
-import { initializeScoreboard, refreshScoreboard } from './operationsScoreboard.js?v=20261025engines1';
+import { initializeMayaGlm, renderMayaGlm, configureMayaGlm, refreshMayaGlm, selectedGlmModel } from './operationsMayaGlm.js?v=20261025notifications1';
+import { initializeBenchmark, setBenchmarkCatalog, refreshBenchmarkLimits } from './operationsBenchmark.js?v=20261025notifications1';
+import { initializeScoreboard, refreshScoreboard } from './operationsScoreboard.js?v=20261025notifications1';
+import { notify, resetNotification } from './operationsNotifications.js?v=20261025notifications1';
 const el = id => document.getElementById(id);
 let active = null;
 let timer = null;
 let busy = false;
 let polling = false;
-let lastActionError = null;
 let selectedJob = null;
 let initialized = false;
 let pendingPanel = null;
@@ -170,19 +170,20 @@ async function refreshResidency() {
     const result = await request('residency');
     if (version !== residencyVersion) return;
     renderResidency(result);
+    resetNotification('management:residency');
   } catch (error) {
     if (version !== residencyVersion) return;
+    notify(`Live refresh failed: ${error.message}`, { severity: 'error', key: 'management:residency' });
     renderResidency({ strata: { message: error.message } });
     for (const id of ['operations-strata-sampled', 'operations-ollama-sampled', 'operations-dwarfstar-sampled', 'operations-maya-sampled', 'operations-maya-glm-sampled']) el(id).textContent = `Live refresh failed: ${error.message}`;
   }
 }
 
-function status(message, error = false) {
-  if (polling && lastActionError && !busy) return;
+function status(message, error = false, background = false) {
   const item = el(`operations-${active}-message`);
-  if (!item) return;
-  item.textContent = message;
-  item.classList.toggle('operations-error', error);
+  if (item) item.textContent = message;
+  if (background && !error) return;
+  notify(message, { severity: error === true ? 'error' : error || 'status', ...(background ? { key: 'management:poll' } : {}) });
 }
 
 async function request(path, body = null) {
@@ -222,10 +223,9 @@ function confirmOperation(text) {
 async function task(action) {
   if (busy) return;
   busy = true;
-  lastActionError = null;
   status('Working…');
   try { await action(); }
-  catch (error) { lastActionError = error.message; status(error.message, true); }
+  catch (error) { status(error.message, true); }
   finally {
     busy = false;
     const pending = pendingPanel;
@@ -272,6 +272,7 @@ function initialize() {
   const management = el('operations-management-panel');
   management.append(node('p', '', 'operations-status'));
   management.firstChild.id = 'operations-management-message';
+  management.firstChild.hidden = true;
   management.firstChild.setAttribute('role', 'status');
   const content = node('div');
   content.id = 'operations-management-content';
@@ -395,7 +396,7 @@ function initialize() {
     command.hidden = false;
     const needsLauncherLink = strataReview.model !== strataState.model && !strataState.switch_available;
     el('operations-strata-apply').disabled = !strataState.restart_available || needsLauncherLink;
-    status(needsLauncherLink ? 'Configure the stable service launcher link before switching quantizations.' : 'Review the setup command. Applying stops Strata, runs setup, then verifies the model and context.');
+    status(needsLauncherLink ? 'Configure the stable service launcher link before switching quantizations.' : 'Review the setup command. Applying stops Strata, runs setup, then verifies the model and context.', needsLauncherLink ? 'warning' : false);
   })));
   configFields.append(command);
   const apply = button('Apply setup and restart Strata', () => task(async () => {
@@ -457,6 +458,7 @@ function initialize() {
   const jobs = el('operations-jobs-panel');
   const message = node('p', '', 'operations-status');
   message.id = 'operations-jobs-message';
+  message.hidden = true;
   message.setAttribute('role', 'status');
   jobs.append(message);
   const jobsContent = node('div');
@@ -645,7 +647,7 @@ async function refreshDetail() {
   el('operations-job-cancel').disabled = !['queued', 'running'].includes(result.job.state);
 }
 
-async function refreshJobs() {
+async function refreshJobs(background = false) {
   const result = await request('jobs');
   el('operations-jobs-content').hidden = false;
   setBenchmarkCatalog(result.benchmark);
@@ -693,14 +695,14 @@ async function refreshJobs() {
   table.append(body); el('operations-job-list').replaceChildren(table);
   await refreshDetail();
   await refreshScoreboard();
-  status(result.demo ? 'Preview data — jobs and results are simulated.' : `${result.jobs?.length || 0} recent jobs. Logs refresh while this tab is visible.`);
+  status(result.demo ? 'Preview data — jobs and results are simulated.' : `${result.jobs?.length || 0} recent jobs. Logs refresh while this tab is visible.`, false, background);
 }
 
 async function poll() {
   if (!active || document.hidden || polling || busy) return;
   polling = true;
   try {
-    await (active === 'management' ? refreshResidency() : refreshJobs());
+    await (active === 'management' ? refreshResidency() : refreshJobs(true));
     if (active === 'management') {
       if (busy) return;
       const draft = dwarfstarState && Number(el('operations-dwarfstar-context').value) !== dwarfstarState.configured_context;
@@ -709,8 +711,9 @@ async function poll() {
       if (!busy && !mayaDraft && !mayaReview) await loadMaya(true);
       if (!busy && active === 'management') await refreshMayaGlm();
     }
+    resetNotification('management:poll');
   }
-  catch (error) { status(error.message, true); }
+  catch (error) { status(error.message, true, true); }
   finally { polling = false; }
 }
 

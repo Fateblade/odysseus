@@ -16,12 +16,13 @@ function harness() {
   let resolve;
   let reject;
   const pending = new Promise((yes, no) => { resolve = yes; reject = no; });
-  const context = vm.createContext({ document: { getElementById: element }, pending });
+  const notifications = [];
+  const context = vm.createContext({ document: { getElementById: element }, pending, notify(message, options) { notifications.push({ message, options }); }, resetNotification() {} });
   vm.runInContext(source, context);
   vm.runInContext(`active = 'management'; request = () => pending;`, context);
   element('operations-maya-context').value = '8192';
   element('operations-maya-drafting').value = 'Off';
-  return { element, resolve, reject, run: code => vm.runInContext(code, context) };
+  return { element, resolve, reject, notifications, run: code => vm.runInContext(code, context) };
 }
 
 const settings = { configured: true, active_context: 8192, minimum_context: 4096, maximum_context: 128000 };
@@ -75,4 +76,10 @@ test('queued service actions remain on Management and retain their job selection
   assert.equal(h.run('active'), 'management');
   assert.equal(h.run('selectedJob'), 'service-job');
   assert.match(h.element('operations-management-message').textContent, /Host job started/);
+});
+
+test('background updates stay quiet even while a user action overlaps polling', () => {
+  const h = harness();
+  h.run("busy = true; polling = true; status('Recent jobs', false, true); status('Benchmark started.');");
+  assert.deepEqual(h.notifications.map(item => item.message), ['Benchmark started.']);
 });
