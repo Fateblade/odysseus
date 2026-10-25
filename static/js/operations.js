@@ -1,8 +1,8 @@
 import { selectResourcePanel } from './operationsResources.js?v=20261024resources1';
 import { applyColors, applyFontDensity, getSaved } from './theme.js';
-import { closeOverview, openOverview } from './operationsOverview.js?v=20261024glm1';
-import { openManagement, closeManagement } from './operationsManagement.js?v=20261024glm1';
-import { showSections, panelForSectionHash } from './operationsNavigation.js?v=20261024glm1';
+import { closeOverview, openOverview } from './operationsOverview.js?v=20261025management1';
+import { openManagement, closeManagement } from './operationsManagement.js?v=20261025management1';
+import { showSections, panelForSectionHash } from './operationsNavigation.js?v=20261025management1';
 import { openAudit } from './operationsAudit.js?v=20261022audit1';
 
 const endpoint = '/api/operations/litellm';

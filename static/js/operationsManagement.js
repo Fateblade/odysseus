@@ -1,6 +1,6 @@
-import { initializeMayaGlm, renderMayaGlm, configureMayaGlm, refreshMayaGlm, selectedGlmModel } from './operationsMayaGlm.js?v=20261024glm1';
-import { initializeBenchmark, setBenchmarkCatalog, refreshBenchmarkLimits } from './operationsBenchmark.js?v=20261024glm1';
-import { initializeScoreboard, refreshScoreboard } from './operationsScoreboard.js?v=20261024glm1';
+import { initializeMayaGlm, renderMayaGlm, configureMayaGlm, refreshMayaGlm, selectedGlmModel } from './operationsMayaGlm.js?v=20261025management1';
+import { initializeBenchmark, setBenchmarkCatalog, refreshBenchmarkLimits } from './operationsBenchmark.js?v=20261025management1';
+import { initializeScoreboard, refreshScoreboard } from './operationsScoreboard.js?v=20261025management1';
 const el = id => document.getElementById(id);
 let active = null;
 let timer = null;
@@ -173,7 +173,11 @@ async function request(path, body = null) {
   if (response.status === 401) window.location.assign('/login');
   const result = await response.json();
   if (!response.ok) throw new Error(result.detail || 'Host operation failed.');
-  if (result.configured === false) throw new Error(result.message);
+  if (result.configured === false) {
+    const error = new Error(result.message);
+    error.unconfigured = true;
+    throw error;
+  }
   return result;
 }
 
@@ -226,7 +230,6 @@ async function manage(payload) {
   else if (result.details) el('operations-management-output').textContent = JSON.stringify(result.details, null, 2);
   if (result.job) {
     selectedJob = result.job.id;
-    el('operations-jobs-tab').click();
   }
   if (active === 'management') await refreshResidency();
 }
@@ -546,12 +549,16 @@ async function refreshManagement() {
   await refreshResidency();
 }
 
-async function loadMaya() {
-  mayaReview = null; mayaState = null;
-  el('operations-maya-apply').disabled = true; el('operations-maya-change').hidden = true;
-  el('operations-maya-config-fields').hidden = true;
+async function loadMaya(background = false) {
+  const context = el('operations-maya-context').value;
+  const drafting = el('operations-maya-drafting').value;
+  const unchanged = () => !background || (!busy && active === 'management' && !mayaReview &&
+    el('operations-maya-context').value === context && el('operations-maya-drafting').value === drafting);
   try {
     const result = await request('maya/config');
+    if (!unchanged()) return;
+    mayaReview = null;
+    el('operations-maya-apply').disabled = true; el('operations-maya-change').hidden = true;
     el('operations-maya-config-status').textContent = result.configured ?
       `Configured: ${tokens(result.configured_context ?? result.active_context)} · Active: ${tokens(result.active_context)}. Limit: ${tokens(result.maximum_context)}. ${result.managed_settings ? result.running ? 'Running; applying restarts it.' : 'Stopped; applying keeps it stopped.' : 'Native context reload.'}` : result.message;
     if (result.configured) {
@@ -563,26 +570,32 @@ async function loadMaya() {
       el('operations-maya-config-fields').hidden = false;
     }
   } catch (error) {
-    el('operations-maya-config-status').textContent = error.message;
+    if (!unchanged()) return;
+    if (error.unconfigured) { mayaState = null; el('operations-maya-config-fields').hidden = true; }
+    el('operations-maya-config-status').textContent = `${error.message}${mayaState ? ' Previous settings are stale; reload before reviewing changes.' : ''}`;
   }
 }
 
-async function loadDwarfstar() {
-  dwarfstarReview = null;
-  el('operations-dwarfstar-apply').disabled = true;
-  el('operations-dwarfstar-change').hidden = true;
+async function loadDwarfstar(background = false) {
+  const context = el('operations-dwarfstar-context').value;
+  const unchanged = () => !background || (!busy && active === 'management' && !dwarfstarReview &&
+    el('operations-dwarfstar-context').value === context);
   try {
     const result = await request('dwarfstar/config');
+    if (!unchanged()) return;
     if (!result.configured) throw new Error(result.message || 'DwarfStar context management is not configured.');
+    dwarfstarReview = null;
+    el('operations-dwarfstar-apply').disabled = true;
+    el('operations-dwarfstar-change').hidden = true;
     dwarfstarState = result;
     el('operations-dwarfstar-context').value = result.configured_context;
     el('operations-dwarfstar-context').max = result.maximum_context;
     el('operations-dwarfstar-config-fields').hidden = false;
     el('operations-dwarfstar-config-status').textContent = `Configured: ${tokens(result.configured_context)} · Active: ${tokens(result.active_context)}\n${result.unit} · ${result.running ? 'Running; applying restarts it' : 'Stopped; applying keeps it stopped'}. Larger contexts need a long-prompt memory test.`;
   } catch (error) {
-    dwarfstarState = null;
-    el('operations-dwarfstar-config-fields').hidden = true;
-    el('operations-dwarfstar-config-status').textContent = error.message;
+    if (!unchanged()) return;
+    if (error.unconfigured) { dwarfstarState = null; el('operations-dwarfstar-config-fields').hidden = true; }
+    el('operations-dwarfstar-config-status').textContent = `${error.message}${dwarfstarState ? ' Previous settings are stale; reload before reviewing changes.' : ''}`;
   }
 }
 
@@ -674,10 +687,10 @@ async function poll() {
     if (active === 'management') {
       if (busy) return;
       const draft = dwarfstarState && Number(el('operations-dwarfstar-context').value) !== dwarfstarState.configured_context;
-      if (!draft && !dwarfstarReview) await loadDwarfstar();
+      if (!busy && !draft && !dwarfstarReview) await loadDwarfstar(true);
       const mayaDraft = mayaState && (Number(el('operations-maya-context').value) !== (mayaState.configured_context ?? mayaState.active_context) || (el('operations-maya-drafting').value === 'On') !== Boolean(mayaState.drafting));
-      if (!busy && !mayaDraft && !mayaReview) await loadMaya();
-      await refreshMayaGlm();
+      if (!busy && !mayaDraft && !mayaReview) await loadMaya(true);
+      if (!busy && active === 'management') await refreshMayaGlm();
     }
   }
   catch (error) { status(error.message, true); }

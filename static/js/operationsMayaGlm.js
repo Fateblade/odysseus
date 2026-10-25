@@ -58,11 +58,17 @@ export function configureMayaGlm(services) {
 export async function refreshMayaGlm(force = false) {
   if (!ui || (!force && (review || (state && Number(ui.context.value) !== state.active_context)))) return;
   const version = ++sequence;
+  const context = ui.context.value;
   try {
     const result = await ui.request('maya-glm/config');
-    if (version !== sequence) return;
+    if (version !== sequence || (!force && (review || ui.context.value !== context))) return;
+    if (force) ui.invalidate();
     ui.status.textContent = result.configured ? `Active: ${result.active_context.toLocaleString()} tokens. Accepted range: ${result.minimum_context.toLocaleString()}–${result.maximum_context.toLocaleString()}.` : result.message;
     ui.fields.hidden = !result.configured;
     if (result.configured) { state = result; ui.context.value = result.active_context; ui.context.min = result.minimum_context; ui.context.max = result.maximum_context; }
-  } catch (error) { if (version === sequence) { ui.status.textContent = error.message; ui.fields.hidden = true; } }
+  } catch (error) {
+    if (version !== sequence || (!force && (review || ui.context.value !== context))) return;
+    ui.status.textContent = `${error.message}${state ? ' Previous settings are stale; reload before reviewing changes.' : ''}`;
+    if (error.unconfigured) { state = null; ui.fields.hidden = true; }
+  }
 }
