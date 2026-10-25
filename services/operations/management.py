@@ -126,12 +126,12 @@ class Management:
         if target == "service":
             if operation not in ("start", "stop", "restart", "status", "logs"):
                 raise OperationsError("Unknown service operation.")
-            if payload.get("name") in ("maya", "maya_glm") and operation in ("start", "stop", "restart"):
+            if payload.get("name") in ("maya", "maya_glm", "dwarfstar") and operation in ("start", "stop", "restart"):
                 backend = payload["name"]
                 if not getattr(self, backend + "_url") or backend not in self.settings.get("services", {}):
-                    raise OperationsError("Configure the Maya endpoint and allowlisted service first.", 503)
+                    raise OperationsError("Configure an explicit systemd unit and endpoint for this allowlisted inference service first.", 503)
                 from services.operations.jobs import enqueue
-                return enqueue(self, {"kind": "maya_service", "backend": backend, "operation": operation, "timeout": 900})
+                return enqueue(self, {"kind": "inference_service" if backend == "dwarfstar" else "maya_service", "backend": backend, "operation": operation, "timeout": 900})
             result = self.service(payload.get("name"), operation, check=operation != "status")
             return {"status": "ok", "log": (result.stdout + result.stderr)[-65536:].decode(errors="replace")}
         if target == "strata":

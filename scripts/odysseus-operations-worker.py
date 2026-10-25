@@ -29,7 +29,7 @@ def perform(folder, management, specification):
     kind = specification["kind"]
     if kind == "benchmark":
         result = benchmark(management, specification)
-    elif kind == "maya_service":
+    elif kind in ("maya_service", "inference_service"):
         from services.operations.maya import run_service
         result = run_service(management, specification)
     elif kind == "maya_context":
@@ -39,13 +39,21 @@ def perform(folder, management, specification):
         from services.operations.dwarfstar_config import run
         result = run(management, specification, folder)
     elif kind == "strata_setup":
+        from services.operations.exclusivity import ensure_available
+        ensure_available(management, "strata")
         from services.operations.strata_config import run
         result = run(management, specification, folder)
     elif kind == "strata":
+        if specification["operation"] == "load":
+            from services.operations.exclusivity import ensure_available
+            ensure_available(management, "strata")
         result = api(management.strata_url, "/" + specification["operation"], {}, timeout=290)
         if result.get("status") in ("busy", "unsupported"):
             raise RuntimeError("Strata cannot change model residency while busy or unsupported.")
     elif kind == "residency":
+        if specification["operation"] != "unload":
+            from services.operations.exclusivity import ensure_available
+            ensure_available(management, "ollama")
         result = api(management.ollama_url, "/api/generate", {"model": specification["model"], "stream": False,
                      "keep_alive": 0 if specification["operation"] == "unload" else "10m"}, timeout=290)
     elif kind == "pull":

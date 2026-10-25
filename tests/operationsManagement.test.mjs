@@ -56,6 +56,16 @@ test('transient Maya errors preserve the last controls and label stale settings'
   assert.match(h.element('operations-maya-config-status').textContent, /stale/);
 });
 
+test('Maya polling preserves a speculative-decoding switch edit in flight', async () => {
+  const h = harness();
+  h.element('operations-maya-drafting').checked = false;
+  const loading = h.run('loadMaya(true)');
+  h.element('operations-maya-drafting').checked = true;
+  h.resolve({ ...settings, drafting: false });
+  await loading;
+  assert.equal(h.element('operations-maya-drafting').checked, true);
+});
+
 test('queued service actions remain on Management and retain their job selection', async () => {
   const h = harness();
   h.run('confirmOperation = async () => true; refreshResidency = async () => {};');

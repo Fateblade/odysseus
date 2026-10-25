@@ -190,7 +190,7 @@ Merge these entries into `~/.config/odysseus-operations/management.json`, preser
 }
 ```
 
-`maximum_context` is the reviewed upper selection bound, not the allocation at startup and not a memory-fit guarantee. The GLM service retains its separate generated run config. Its context controls use native reload when loaded and ready; the DeepSeek DSpark settings editor never edits the GLM config. A context change is a queued host job and may interrupt requests.
+`maximum_context` is the reviewed upper selection bound, not the allocation at startup and not a memory-fit guarantee. The GLM service retains its separate generated run config. The dashboard discovers the default isolated GLM config at `~/project-maya-glm53/maya-maya-s-v2-iq2_xxs-hip.json`. For another path, set `maya_glm_setup.config_file` to its absolute filename (and `unit_file` if the user unit is outside its normal location). Managed context and native MTP changes use Review changes / Apply changes: a running service restarts and verifies its context and the actual child engine switch; a stopped service stays stopped. Reserved-VRAM and other unrelated settings are preserved. If no managed config is available, the context-only native reload remains available while GLM is ready. DeepSeek DSpark settings never edit GLM settings.
 
 Add this to the Odysseus `.env`, keeping the working `ODYSSEUS_OPERATIONS_MAYA_URL` unchanged:
 
@@ -248,24 +248,11 @@ For comparison, record artifact size about 89.84 GiB, quantization `Maya-S-v2-IQ
 
 **Known Linux reserved-VRAM case:** the first host test with 96 GiB firmware GPU reservation / 30.48 GiB Linux RAM produced an 8.28 GiB expert pool, 9.27 GiB pinned RAM tier and about 3 decode t/s. If startup shows this pattern, follow the [reserved-VRAM fix and rebuild guide](MAYA_GLM53_RESERVED_VRAM_FIX.md) before MTP trials. The fix is opt-in, source-pinned and verifies the active GPU reservation at runtime; it is not needed for normal shared-memory layouts. Do not reduce system headroom to work around this planner mismatch.
 
-After the baseline, stop GLM in Management. Back up its config, then change only the isolated config's native MTP switch:
+After the baseline, open **Management → Exclusive engines → Maya GLM**. Set **Native MTP speculative decoding**, choose **Review changes**, inspect the context/MTP diff and choose **Apply changes**. Confirm the restart. A running service restarts automatically; a stopped service saves the setting without starting. The host job backs up the isolated config and attempts recovery if startup verification fails. The switch changes only MAYA_GLM_MTP_DECODE (and its equivalent legacy alias); the reserved-VRAM setting and system headroom remain intact. No engine rebuild is needed to switch modes.
 
-```bash
-cd "$HOME/project-maya-glm53"
-cp -p maya-maya-s-v2-iq2_xxs-hip.json "$GLM_BACKUP/glm-before-mtp.json"
-.venv/bin/python - <<'PYMTP'
-import json
-from pathlib import Path
-path = Path('maya-maya-s-v2-iq2_xxs-hip.json')
-config = json.loads(path.read_text())
-env = config.setdefault('env', {})
-env.pop('STRATA_GLM_MTP_DECODE', None)
-env['MAYA_GLM_MTP_DECODE'] = '1'
-path.write_text(json.dumps(config, indent=2) + '\n')
-PYMTP
-```
+All three exclusive engines—Maya DS41F, Maya GLM and DwarfStar—share Start, Stop, Refresh status, Logs and reviewed settings controls in one desktop row. They stack on smaller screens. A separator places Ollama and Strata in **Shared engines**. Dashboard service starts and shared-engine model loads refuse known conflicts rather than stopping other models automatically. DwarfStar service changes now use the same durable host-job queue. Direct host commands and external callers remain outside these dashboard controls.
 
-Start GLM through Management and repeat the same seed, task sizes, output cap, context and sampling, recording MTP-on in notes. Check native draft counts/acceptance where reported and output quality. The pinned gfx115x code otherwise enables native MTP by default. Variables `MAYA_GLM_NO_MTP` / `MAYA_GLM_NO_SPEC` (or `STRATA_` equivalents) disable by presence, even the text `0`; inspect the service environment if drafts remain absent. Do not unset the global user-manager environment blindly or change the DS41F config. Restore `MAYA_GLM_MTP_DECODE=0` in this profile for an off comparison. There is no GLM DSpark toggle in the dashboard.
+Repeat the same task-set seed, task sizes, output cap, context and sampling, recording the MTP mode in notes. Check native draft counts/acceptance where reported and inspect output quality. Variables MAYA_GLM_NO_MTP / MAYA_GLM_NO_SPEC (or STRATA_ equivalents) disable by presence, even the text `0`; enabling MTP refuses conflicting profile settings rather than silently removing them. Parallel sequences, an external drafter or zero draft length can also prevent native MTP. If the saved mode differs from the actual running child engine, the settings card asks for a restart instead of reporting a misleading switch state. Inspect unusual service environment settings if startup verification fails; do not unset the global user-manager environment blindly.
 
 Run the shared native text and structured tool-call acceptance check while GLM is ready:
 

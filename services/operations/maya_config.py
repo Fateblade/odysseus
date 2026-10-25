@@ -11,8 +11,8 @@ from services.operations.maya import inventory, glm_inventory
 
 def snapshot(management, backend="maya"):
     from services.operations import maya_settings
-    if backend == "maya" and maya_settings.enabled(management):
-        return maya_settings.snapshot(management)
+    if maya_settings.enabled(management, backend):
+        return maya_settings.snapshot(management, backend)
     url = getattr(management, backend + "_url")
     if not url:
         return {"configured": False, "message": "Configure the Maya host endpoint first."}
@@ -40,8 +40,8 @@ def snapshot(management, backend="maya"):
 
 def review(management, payload, backend="maya"):
     from services.operations import maya_settings
-    if backend == "maya" and maya_settings.enabled(management):
-        return maya_settings.review(management, payload)
+    if maya_settings.enabled(management, backend):
+        return maya_settings.review(management, payload, backend)
     current = snapshot(management, backend)
     if not current["configured"]:
         raise OperationsError(current["message"], 503)
@@ -69,8 +69,8 @@ def enqueue_apply(management, payload, backend="maya"):
 def run(management, specification, folder):
     backend = specification.get("backend", "maya")
     from services.operations import maya_settings
-    if backend == "maya" and maya_settings.enabled(management):
-        return maya_settings.run(management, specification, folder)
+    if maya_settings.enabled(management, backend):
+        return maya_settings.run(management, specification, folder, backend)
     from services.operations.management import api
     reviewed = review(management, specification, backend)
     if specification.get("review_digest") != reviewed["review_digest"]:

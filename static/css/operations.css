@@ -235,3 +235,22 @@ body.operations-page { --operations-muted: color-mix(in srgb, var(--fg) 68%, var
 .operations-maya-glm-residency { grid-column: 1 / -1; }
 
 .operations-maya-glm-residency .operations-field { max-width: 320px; margin-top: 16px; }
+
+.operations-engine-group { grid-column: 1 / -1; min-width: 0; padding-top: 24px; border-top: 1px solid var(--border); }
+.operations-exclusive-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 20px; align-items: start; }
+.operations-shared-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 20px; align-items: start; }
+.operations-exclusive-grid > section, .operations-shared-grid > section { grid-column: auto; grid-row: auto; min-width: 0; }
+.operations-exclusive-grid .operations-card > h2 { margin-bottom: 8px; }
+.operations-exclusive-grid .operations-card > .operations-muted:first-of-type { min-height: 2.5em; }
+.operations-exclusive-grid .operations-engine-actions { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 20px; }
+.operations-exclusive-grid .operations-engine-actions button { margin: 0; }
+.operations-exclusive-grid .operations-field { max-width: none; }
+.operations-toggle { display: flex; align-items: center; gap: 10px; margin: 20px 0 12px; cursor: pointer; }
+.operations-toggle input { appearance: none; width: 36px; height: 20px; flex: 0 0 36px; margin: 0; padding: 2px; border: 1px solid var(--border); border-radius: 12px; background: var(--bg); cursor: pointer; }
+.operations-toggle input::before { content: ''; display: block; width: 14px; height: 14px; border-radius: 50%; background: var(--operations-muted); }
+.operations-toggle input:checked { border-color: var(--fg); }
+.operations-toggle input:checked::before { transform: translateX(16px); background: var(--fg); }
+.operations-toggle input:focus-visible { outline: 2px solid var(--fg); outline-offset: 3px; }
+.operations-toggle input:disabled { opacity: .45; cursor: default; }
+@media (max-width: 1150px) { .operations-exclusive-grid { grid-template-columns: minmax(0, 1fr); } }
+@media (max-width: 700px) { .operations-shared-grid { grid-template-columns: minmax(0, 1fr); } }

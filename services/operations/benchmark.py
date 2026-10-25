@@ -159,6 +159,9 @@ def _sample(management, specification):
 
 
 def run(management, specification):
+    if specification["backend"] in ("ollama", "strata"):
+        from services.operations.exclusivity import ensure_available
+        ensure_available(management, specification["backend"])
     from services.operations.scoreboard import summarize
     legacy_task = {"id": "custom", "family": "custom", "size": None, "prompt": specification["prompt"],
                    "prompt_sha256": hashlib.sha256(specification["prompt"].encode()).hexdigest()}

@@ -8,26 +8,19 @@ from services.operations.litellm_host import get_json
 def run_service(management, specification):
     from services.operations.litellm_config import OperationsError
     backend = specification.get("backend", "maya")
-    if backend not in ("maya", "maya_glm"):
-        raise OperationsError("Choose an allowlisted Maya profile.")
+    if backend not in ("maya", "maya_glm", "dwarfstar"):
+        raise OperationsError("Choose an allowlisted exclusive engine.")
     url = getattr(management, backend + "_url", "")
     probe = glm_inventory if backend == "maya_glm" else inventory
+    if backend == "dwarfstar":
+        from services.operations.dwarfstar import inventory as dwarfstar_inventory
+        probe = lambda base: dwarfstar_inventory(base, management)
     operation = specification.get("operation")
     if operation not in ("start", "stop", "restart"):
-        raise OperationsError("Unknown Maya service operation.")
+        raise OperationsError("Unknown inference service operation.")
     if operation in ("start", "restart"):
-        live = management.residency()
-        other = "maya" if backend == "maya_glm" else "maya_glm"
-        competing = live.get(other, {})
-        if competing.get("loaded"):
-            raise OperationsError("Stop the other Maya profile before starting this one. Models are never stopped automatically.", 409)
-        if competing.get("configured") and competing.get("status") not in ("ok", "unloaded", "disabled"):
-            state = management.service(other, "is-active", check=False)
-            if state.returncode != 3 or state.stdout.decode().strip() != "inactive":
-                raise OperationsError("The other Maya profile is not confirmed stopped. Inspect its service before starting.", 409)
-        if (live["strata"].get("loaded") or live["ollama"].get("loaded")
-                or live["dwarfstar"].get("loaded")):
-            raise OperationsError("Unload competing Strata/Ollama models and stop DwarfStar before starting Maya.", 409)
+        from services.operations.exclusivity import ensure_available
+        ensure_available(management, backend)
     result = management.service(backend, operation)
     if operation in ("start", "restart"):
         deadline = time.monotonic() + 600
@@ -37,7 +30,7 @@ def run_service(management, specification):
             management.service(backend, "status")
             time.sleep(2)
         else:
-            raise OperationsError("Maya startup readiness was not verified. Inspect service logs and memory before another job.", 502)
+            raise OperationsError("Engine startup readiness was not verified. Inspect service logs and memory before another job.", 502)
     elif probe(url).get("status") == "ok":
         raise OperationsError("Maya still answers after the managed service stopped. Inspect other server processes.", 409)
     return {"status": "ok", "operation": operation,

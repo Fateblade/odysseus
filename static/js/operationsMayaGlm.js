@@ -6,39 +6,38 @@ let sequence = 0;
 export const selectedGlmModel = () => aliases[0] || 'glm-5.3-flash';
 
 export function initializeMayaGlm(parent, helpers) {
-  const { section, field, button, node, task, request, manage, refreshResidency, confirmOperation, started } = helpers;
-  const card = section(parent, 'Maya GLM residency', 'Isolated GLM-5.3-Flash Maya-S-v2 profile. Stop Maya DS41F and other large models before starting. Existing services are never stopped automatically.', 'operations-maya-glm-residency');
+  const { section, field, toggle, engineControls, button, node, task, request, confirmOperation, started } = helpers;
+  const card = section(parent, 'Maya GLM', 'GLM-5.3-Flash · Maya-S-v2', 'operations-maya-glm-residency');
   const live = node('div', 'Reading live status…'); live.id = 'operations-maya-glm-live';
   const sampled = node('p', '', 'operations-muted'); sampled.id = 'operations-maya-glm-sampled';
-  const actions = node('div', '', 'cookbook-actions');
-  const start = button('Start GLM Maya', () => task(() => manage({ target: 'service', name: 'maya_glm', operation: 'start' })));
-  const stop = button('Stop GLM Maya', () => task(() => manage({ target: 'service', name: 'maya_glm', operation: 'stop' })));
-  start.disabled = true; stop.disabled = true;
-  actions.append(start, stop, button('Refresh status', () => task(refreshResidency)));
-  const status = node('p', 'Read context limits after GLM is ready.', 'operations-status'); status.id = 'operations-maya-glm-config-status';
+  const { start, stop } = engineControls(card, 'maya_glm');
+  const status = node('p', 'Reading GLM settings…', 'operations-status'); status.id = 'operations-maya-glm-config-status';
   const fields = node('div'); fields.hidden = true;
   const context = field(fields, 'operations-maya-glm-context', 'Maximum context (tokens)', 8192, null, 'number'); context.step = 1;
+  const drafting = toggle(fields, 'operations-maya-glm-drafting', 'Native MTP speculative decoding');
+  const draftingNote = node('p', '', 'operations-muted'); fields.append(draftingNote);
   const diff = node('pre', '', 'operations-diff'); diff.hidden = true;
-  const apply = button('Apply GLM context', () => task(async () => {
-    if (!review) throw new Error('Review the GLM context change first.');
-    if (!await confirmOperation(`Set GLM Maya context to ${review.context.toLocaleString()} tokens? Native reload saves its isolated config and may interrupt requests. More context consumes more memory.`)) return;
-    const result = await request('maya-glm/apply', { revision: review.revision, context: review.context, review_digest: review.review_digest });
+  const apply = button('Apply changes', () => task(async () => {
+    if (!review) throw new Error('Review the GLM settings change first.');
+    const effect = review.managed_settings ? `Native MTP ${review.drafting ? 'on' : 'off'}. A running service restarts and interrupts requests; a stopped service stays stopped. Previous settings are backed up for recovery.` : 'Native reload may interrupt requests.';
+    if (!await confirmOperation(`Set GLM context to ${review.context.toLocaleString()} tokens? ${effect} More context consumes more memory.`)) return;
+    const result = await request('maya-glm/apply', { revision: review.revision, context: review.context, ...(review.managed_settings ? { drafting: review.drafting } : {}), review_digest: review.review_digest });
     review = null; state = null; apply.disabled = true; diff.hidden = true;
     await started(result);
   })); apply.disabled = true;
   const invalidate = () => { review = null; apply.disabled = true; diff.hidden = true; };
   context.addEventListener('input', invalidate);
+  drafting.addEventListener('change', invalidate);
   const settingActions = node('div', '', 'cookbook-actions');
-  settingActions.append(button('Review GLM context', () => task(async () => {
-    invalidate(); const value = Number(context.value); const revision = state?.revision;
-    const result = await request('maya-glm/preview', { revision, context: value });
-    if (Number(context.value) !== value || state?.revision !== revision) throw new Error('GLM settings changed during review. Review again.');
+  settingActions.append(button('Review changes', () => task(async () => {
+    invalidate(); const value = Number(context.value); const revision = state?.revision; const mtp = drafting.checked;
+    const result = await request('maya-glm/preview', { revision, context: value, ...(state?.managed_settings ? { drafting: mtp } : {}) });
+    if (Number(context.value) !== value || drafting.checked !== mtp || state?.revision !== revision) throw new Error('GLM settings changed during review. Review again.');
     review = result; diff.textContent = result.display_change; diff.hidden = false; apply.disabled = false;
   })), apply);
   fields.append(settingActions, diff);
-  card.append(live, sampled, actions, status, button('Reload GLM context limits', () => task(() => refreshMayaGlm(true))), fields,
-    node('p', 'GLM uses its embedded native MTP, not DeepSeek DSpark. The setup guide selects the initial MTP mode explicitly. Context edits require this GLM server to be loaded and ready.', 'operations-muted'));
-  ui = { ...helpers, live, status, fields, context, diff, apply, start, stop, invalidate };
+  card.append(live, sampled, status, button('Reload settings', () => task(() => refreshMayaGlm(true))), fields);
+  ui = { ...helpers, live, status, fields, context, drafting, draftingNote, diff, apply, start, stop, invalidate };
 }
 
 export function renderMayaGlm(data) {
@@ -56,18 +55,23 @@ export function configureMayaGlm(services) {
 }
 
 export async function refreshMayaGlm(force = false) {
-  if (!ui || (!force && (review || (state && Number(ui.context.value) !== state.active_context)))) return;
+  if (!ui || (!force && (review || (state && (Number(ui.context.value) !== (state.configured_context ?? state.active_context) || ui.drafting.checked !== Boolean(state.drafting)))))) return;
   const version = ++sequence;
   const context = ui.context.value;
+  const drafting = ui.drafting.checked;
   try {
     const result = await ui.request('maya-glm/config');
-    if (version !== sequence || (!force && (review || ui.context.value !== context))) return;
+    if (version !== sequence || (!force && (review || ui.context.value !== context || ui.drafting.checked !== drafting))) return;
     if (force) ui.invalidate();
-    ui.status.textContent = result.configured ? `Active: ${result.active_context.toLocaleString()} tokens. Accepted range: ${result.minimum_context.toLocaleString()}–${result.maximum_context.toLocaleString()}.` : result.message;
+    ui.status.textContent = result.configured ? `Configured: ${(result.configured_context ?? result.active_context).toLocaleString()} tokens · Active: ${result.active_context?.toLocaleString() || 'Stopped'}. Accepted range: ${result.minimum_context.toLocaleString()}–${result.maximum_context.toLocaleString()}.` : result.message;
     ui.fields.hidden = !result.configured;
-    if (result.configured) { state = result; ui.context.value = result.active_context; ui.context.min = result.minimum_context; ui.context.max = result.maximum_context; }
+    if (result.configured) {
+      state = result; ui.context.value = result.configured_context ?? result.active_context; ui.context.min = result.minimum_context; ui.context.max = result.maximum_context;
+      ui.drafting.checked = Boolean(result.drafting); ui.drafting.disabled = !result.managed_settings;
+      ui.draftingNote.textContent = result.managed_settings ? `Native MTP ${result.drafting ? 'on' : 'off'}. ${result.running ? 'Applying restarts this service and verifies the engine switch.' : 'Applying saves settings and keeps the service stopped.'}` : 'Configure the managed GLM profile to enable the MTP switch. Native context reload remains available.';
+    }
   } catch (error) {
-    if (version !== sequence || (!force && (review || ui.context.value !== context))) return;
+    if (version !== sequence || (!force && (review || ui.context.value !== context || ui.drafting.checked !== drafting))) return;
     ui.status.textContent = `${error.message}${state ? ' Previous settings are stale; reload before reviewing changes.' : ''}`;
     if (error.unconfigured) { state = null; ui.fields.hidden = true; }
   }

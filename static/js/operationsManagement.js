@@ -1,6 +1,6 @@
-import { initializeMayaGlm, renderMayaGlm, configureMayaGlm, refreshMayaGlm, selectedGlmModel } from './operationsMayaGlm.js?v=20261025management1';
-import { initializeBenchmark, setBenchmarkCatalog, refreshBenchmarkLimits } from './operationsBenchmark.js?v=20261025management1';
-import { initializeScoreboard, refreshScoreboard } from './operationsScoreboard.js?v=20261025management1';
+import { initializeMayaGlm, renderMayaGlm, configureMayaGlm, refreshMayaGlm, selectedGlmModel } from './operationsMayaGlm.js?v=20261025engines1';
+import { initializeBenchmark, setBenchmarkCatalog, refreshBenchmarkLimits } from './operationsBenchmark.js?v=20261025engines1';
+import { initializeScoreboard, refreshScoreboard } from './operationsScoreboard.js?v=20261025engines1';
 const el = id => document.getElementById(id);
 let active = null;
 let timer = null;
@@ -55,6 +55,26 @@ function section(parent, title, description, className = '') {
   item.append(node('h2', title), node('p', description, 'operations-muted'));
   parent.append(item);
   return item;
+}
+
+function toggle(parent, id, title) {
+  const label = node('label', '', 'operations-toggle');
+  const input = node('input'); input.type = 'checkbox'; input.id = id; input.setAttribute('role', 'switch');
+  label.append(input, node('span', title)); parent.append(label);
+  return input;
+}
+
+function engineControls(card, name) {
+  const row = node('div', '', 'cookbook-actions operations-engine-actions');
+  const controls = {};
+  for (const operation of ['start', 'stop']) {
+    const control = button(operation === 'start' ? 'Start' : 'Stop', () => task(() => manage({ target: 'service', name, operation })));
+    control.id = `operations-${name.replaceAll('_', '-')}-${operation}`; control.disabled = true;
+    controls[operation] = control; row.append(control);
+  }
+  row.append(button('Refresh status', () => task(refreshResidency)), button('Logs', () => task(() => manage({ target: 'service', name, operation: 'logs' }))));
+  card.insertBefore(row, card.children[2] || null);
+  return controls;
 }
 
 const tokens = value => Number.isFinite(value) && value > 0 ? `${value.toLocaleString()} tokens` : 'Not reported';
@@ -272,55 +292,44 @@ function initialize() {
   strataActions.append(button('Refresh status', () => task(refreshResidency)));
   ['load', 'unload'].forEach(operation => strataActions.append(button(operation, () => task(() => manage({ target: 'strata', operation })))));
   strata.append(strataActions);
-  const maya = section(content, 'Maya residency', 'Experimental DeepSeek V4.1 Maya-XS backend. Unload competing models before starting. Controls use the host job queue; no automatic backend switching.', 'operations-maya-residency');
+  const maya = section(content, 'Maya DS41F', 'DeepSeek V4.1 Flash · Maya-XS', 'operations-maya-residency');
   const mayaLive = node('div', 'Reading live status…'); mayaLive.id = 'operations-maya-live';
   const mayaSampled = node('p', '', 'operations-muted'); mayaSampled.id = 'operations-maya-sampled';
   maya.append(mayaLive, mayaSampled);
-  for (const operation of ['start', 'stop']) {
-    const control = button(`${operation === 'start' ? 'Start' : 'Stop'} Maya`, () => task(() => manage({ target: 'service', name: 'maya', operation })));
-    control.id = `operations-maya-${operation}`; control.disabled = true; maya.append(control);
-  }
-  maya.append(button('Refresh status', () => task(refreshResidency)));
+  engineControls(maya, 'maya');
   const mayaStatus = node('p', 'Reading Maya settings…', 'operations-status'); mayaStatus.id = 'operations-maya-config-status';
   const mayaFields = node('div'); mayaFields.id = 'operations-maya-config-fields'; mayaFields.hidden = true;
   const mayaContext = field(mayaFields, 'operations-maya-context', 'Maximum context (tokens)', 4096, null, 'number'); mayaContext.step = 1;
-  const mayaDrafting = field(mayaFields, 'operations-maya-drafting', 'DSpark speculative decoding', 'Off', ['Off', 'On']);
+  const mayaDrafting = toggle(mayaFields, 'operations-maya-drafting', 'DSpark speculative decoding');
   const mayaDraftingNote = node('p', '', 'operations-muted'); mayaDraftingNote.id = 'operations-maya-drafting-note'; mayaFields.append(mayaDraftingNote);
   const mayaChange = node('pre', '', 'operations-diff'); mayaChange.id = 'operations-maya-change'; mayaChange.hidden = true;
-  const mayaApply = button('Apply settings', () => task(async () => {
+  const mayaApply = button('Apply changes', () => task(async () => {
     if (!mayaReview) throw new Error('Review the settings change first.');
     const effect = mayaReview.managed_settings ? `DSpark ${mayaReview.drafting ? 'on' : 'off'}. A running service restarts and interrupts requests; a stopped service stays stopped. Previous settings are backed up and recovery is attempted if startup fails.` : 'Native reload saves its config and may interrupt requests. Cancelling the host job does not cancel a native reload.';
     if (!await confirmOperation(`Set Maya context to ${mayaReview.context.toLocaleString()} tokens? ${effect} Larger contexts and drafting use more memory.`)) return;
     const result = await request('maya/apply', { revision: mayaReview.revision, context: mayaReview.context, ...(mayaReview.managed_settings ? { drafting: mayaReview.drafting } : {}), review_digest: mayaReview.review_digest });
     mayaReview = null; mayaState = null; mayaApply.disabled = true; mayaChange.hidden = true;
-    selectedJob = result.job.id; status('Maya settings job queued. Inspect its progress in Scripts & TPS tests.'); await refreshJobs();
+    selectedJob = result.job.id; status('Maya settings job queued. Inspect its progress in Scripts & TPS tests.');
   }));
   mayaApply.id = 'operations-maya-apply'; mayaApply.disabled = true;
-  mayaFields.append(button('Review settings', () => task(async () => {
+  mayaFields.append(button('Review changes', () => task(async () => {
     mayaReview = null; mayaApply.disabled = true;
-    const context = Number(mayaContext.value); const revision = mayaState?.revision; const drafting = mayaDrafting.value === 'On';
+    const context = Number(mayaContext.value); const revision = mayaState?.revision; const drafting = mayaDrafting.checked;
     const reviewed = await request('maya/preview', { revision, context, ...(mayaState?.managed_settings ? { drafting } : {}) });
-    if (Number(mayaContext.value) !== context || (mayaDrafting.value === 'On') !== drafting || mayaState?.revision !== revision) throw new Error('Settings changed during review. Review again.');
+    if (Number(mayaContext.value) !== context || (mayaDrafting.checked) !== drafting || mayaState?.revision !== revision) throw new Error('Settings changed during review. Review again.');
     mayaReview = reviewed; mayaChange.textContent = reviewed.display_change; mayaChange.hidden = false; mayaApply.disabled = false;
   })), mayaApply, mayaChange);
   mayaContext.addEventListener('input', () => { mayaReview = null; mayaApply.disabled = true; mayaChange.hidden = true; });
   mayaDrafting.addEventListener('change', () => { mayaReview = null; mayaApply.disabled = true; mayaChange.hidden = true; });
   maya.append(mayaStatus, button('Reload settings', () => task(loadMaya)), mayaFields);
-  initializeMayaGlm(content, { section, field, button, node, task, request, manage, refreshResidency, confirmOperation, started: async result => { selectedJob = result.job.id; await refreshJobs(); status('GLM context job queued.'); } });
-  const dwarfstar = section(content, 'DwarfStar residency', 'DeepSeek V4 Flash is selected when the server starts. Starting loads the model; stopping releases it and interrupts requests. First unload Strata and Ollama models. Other backends are never stopped automatically.', 'operations-dwarfstar-residency');
+  initializeMayaGlm(content, { section, field, toggle, engineControls, button, node, task, request, manage, refreshResidency, confirmOperation, started: result => { selectedJob = result.job.id; status('GLM settings job queued. Inspect its progress in Scripts & TPS tests.'); } });
+  const dwarfstar = section(content, 'DwarfStar', 'DeepSeek V4 Flash · DwarfStar', 'operations-dwarfstar-residency');
   const dwarfstarLive = node('div', 'Reading live status…');
   dwarfstarLive.id = 'operations-dwarfstar-live';
   const dwarfstarSampled = node('p', '', 'operations-muted');
   dwarfstarSampled.id = 'operations-dwarfstar-sampled';
-  const dwarfstarActions = node('div', '', 'cookbook-actions');
-  dwarfstarActions.append(button('Refresh status', () => task(refreshResidency)));
-  for (const operation of ['start', 'stop']) {
-    const control = button(`${operation === 'start' ? 'Start' : 'Stop'} DwarfStar`, () => task(() => manage({ target: 'service', name: 'dwarfstar', operation })));
-    control.id = `operations-dwarfstar-${operation}`;
-    control.disabled = true;
-    dwarfstarActions.append(control);
-  }
-  dwarfstar.append(dwarfstarLive, dwarfstarSampled, dwarfstarActions, node('p', 'Start and stop controls require a dwarfstar entry in the host service configuration. Startup can take time; refresh readiness and inspect the service logs.', 'operations-muted'));
+  dwarfstar.append(dwarfstarLive, dwarfstarSampled);
+  engineControls(dwarfstar, 'dwarfstar');
   const dwarfstarStatus = node('p', 'Reading context configuration…', 'operations-status');
   dwarfstarStatus.id = 'operations-dwarfstar-config-status';
   const dwarfstarFields = node('div');
@@ -331,20 +340,18 @@ function initialize() {
   const dwarfstarChange = node('pre', '', 'operations-diff');
   dwarfstarChange.id = 'operations-dwarfstar-change';
   dwarfstarChange.hidden = true;
-  const dwarfstarApply = button('Apply context', () => task(async () => {
+  const dwarfstarApply = button('Apply changes', () => task(async () => {
     if (!dwarfstarReview) throw new Error('Review the context change first.');
     if (!await confirmOperation(`Set DwarfStar context to ${dwarfstarReview.context.toLocaleString()} tokens? A running server will restart and interrupt requests. A stopped server stays stopped. More context uses more memory. Startup failure triggers an attempt to restore the previous context.`)) return;
     const result = await request('dwarfstar/apply', { revision: dwarfstarReview.revision, context: dwarfstarReview.context, review_digest: dwarfstarReview.review_digest });
     dwarfstarReview = null; dwarfstarState = null; dwarfstarApply.disabled = true;
     dwarfstarChange.hidden = true;
     selectedJob = result.job.id;
-    await refreshJobs();
-    await loadDwarfstar();
     status('Context job queued. Inspect its progress and result in Scripts & TPS tests.');
   }));
   dwarfstarApply.id = 'operations-dwarfstar-apply';
   dwarfstarApply.disabled = true;
-  dwarfstarFields.append(button('Review context change', () => task(async () => {
+  dwarfstarFields.append(button('Review changes', () => task(async () => {
     dwarfstarReview = null; dwarfstarApply.disabled = true;
     const context = Number(dwarfstarContext.value);
     if (!Number.isInteger(context) || context < 1024 || context > dwarfstarState.maximum_context) throw new Error(`Enter a whole number between 1024 and ${dwarfstarState.maximum_context} tokens.`);
@@ -357,7 +364,7 @@ function initialize() {
     dwarfstarApply.disabled = false;
   })), dwarfstarApply, dwarfstarChange);
   dwarfstarContext.addEventListener('input', () => { dwarfstarReview = null; dwarfstarApply.disabled = true; dwarfstarChange.hidden = true; });
-  dwarfstar.append(dwarfstarStatus, button('Reload context configuration', () => task(loadDwarfstar)), dwarfstarFields);
+  dwarfstar.append(dwarfstarStatus, button('Reload settings', () => task(loadDwarfstar)), dwarfstarFields);
   content.insertBefore(dwarfstar, maya);
   const configuration = section(content, 'Strata configuration', 'Choose quantization and context. Applying prepares the model, restarts Strata and verifies the result. New quantizations may need a download.', 'operations-strata-configuration');
   const contextStatus = node('p', 'Loading Strata configuration…', 'operations-status');
@@ -436,6 +443,16 @@ function initialize() {
   const output = node('pre', 'Select logs, status or model details.', 'operations-diff');
   output.id = 'operations-management-output';
   outputSection.append(output);
+
+  const exclusive = node('div', '', 'operations-engine-group'); exclusive.id = 'operations-exclusive-engines';
+  exclusive.append(node('h2', 'Exclusive engines'), node('p', 'Run one at a time. Stop the other exclusive engines and unload Ollama / Strata models before starting. Other models are never stopped automatically.', 'operations-muted'));
+  const exclusiveGrid = node('div', '', 'operations-exclusive-grid');
+  exclusiveGrid.append(maya, el('operations-maya-glm-live').closest('section'), dwarfstar);
+  exclusive.append(exclusiveGrid); content.insertBefore(exclusive, strata);
+  const shared = node('div', '', 'operations-engine-group operations-shared-engines'); shared.id = 'operations-shared-engines';
+  shared.append(node('h2', 'Shared engines'), node('p', 'Ollama and Strata can share the available memory. Keep exclusive engines stopped while using these models.', 'operations-muted'));
+  const sharedGrid = node('div', '', 'operations-shared-grid');
+  content.insertBefore(shared, strata); sharedGrid.append(strata, loaded, configuration, models); shared.append(sharedGrid);
 
   const jobs = el('operations-jobs-panel');
   const message = node('p', '', 'operations-status');
@@ -543,7 +560,7 @@ async function refreshManagement() {
   if (!strataState || (!draft && !strataReview)) await loadStrata();
   const dwarfstarDraft = dwarfstarState && Number(el('operations-dwarfstar-context').value) !== dwarfstarState.configured_context;
   if (!dwarfstarState || (!dwarfstarDraft && !dwarfstarReview)) await loadDwarfstar();
-  const mayaDraft = mayaState && (Number(el('operations-maya-context').value) !== (mayaState.configured_context ?? mayaState.active_context) || (el('operations-maya-drafting').value === 'On') !== Boolean(mayaState.drafting));
+  const mayaDraft = mayaState && (Number(el('operations-maya-context').value) !== (mayaState.configured_context ?? mayaState.active_context) || el('operations-maya-drafting').checked !== Boolean(mayaState.drafting));
   if (!mayaState || (!mayaDraft && !mayaReview)) await loadMaya();
   await refreshMayaGlm();
   await refreshResidency();
@@ -551,9 +568,9 @@ async function refreshManagement() {
 
 async function loadMaya(background = false) {
   const context = el('operations-maya-context').value;
-  const drafting = el('operations-maya-drafting').value;
+  const drafting = el('operations-maya-drafting').checked;
   const unchanged = () => !background || (!busy && active === 'management' && !mayaReview &&
-    el('operations-maya-context').value === context && el('operations-maya-drafting').value === drafting);
+    el('operations-maya-context').value === context && el('operations-maya-drafting').checked === drafting);
   try {
     const result = await request('maya/config');
     if (!unchanged()) return;
@@ -564,7 +581,7 @@ async function loadMaya(background = false) {
     if (result.configured) {
       mayaState = result; el('operations-maya-context').value = result.configured_context ?? result.active_context;
       el('operations-maya-context').min = result.minimum_context; el('operations-maya-context').max = result.maximum_context;
-      el('operations-maya-drafting').value = result.drafting ? 'On' : 'Off';
+      el('operations-maya-drafting').checked = Boolean(result.drafting);
       el('operations-maya-drafting').disabled = !result.managed_settings || (!result.drafter_available && !result.drafting);
       el('operations-maya-drafting-note').textContent = !result.managed_settings ? 'DSpark requires maya_setup.config_file and a managed user service on the host.' : result.drafter_available ? 'Uses the pack’s MTP drafter. On may improve or reduce TPS; compare with the same benchmark. Off unloads the drafter on restart.' : 'MTP drafter not found in this pack. Enabling DSpark is unavailable.';
       el('operations-maya-config-fields').hidden = false;
@@ -688,7 +705,7 @@ async function poll() {
       if (busy) return;
       const draft = dwarfstarState && Number(el('operations-dwarfstar-context').value) !== dwarfstarState.configured_context;
       if (!busy && !draft && !dwarfstarReview) await loadDwarfstar(true);
-      const mayaDraft = mayaState && (Number(el('operations-maya-context').value) !== (mayaState.configured_context ?? mayaState.active_context) || (el('operations-maya-drafting').value === 'On') !== Boolean(mayaState.drafting));
+      const mayaDraft = mayaState && (Number(el('operations-maya-context').value) !== (mayaState.configured_context ?? mayaState.active_context) || el('operations-maya-drafting').checked !== Boolean(mayaState.drafting));
       if (!busy && !mayaDraft && !mayaReview) await loadMaya(true);
       if (!busy && active === 'management') await refreshMayaGlm();
     }

@@ -8,9 +8,11 @@ const sections = {
   litellm: [['deployments', 'Deployments', '.operations-deployments'], ['routing', 'Routing', '.operations-routing'], ['review', 'Review changes', '#operations-preview']],
   management: [
     ['containers', 'Containers', '.operations-control-docker'], ['servers', 'Inference servers', '.operations-control-service'],
-    ['strata', 'Strata residency', '.operations-strata-residency'], ['ollama', 'Ollama residency', '.operations-ollama-residency'],
+    ['exclusive', 'Exclusive engines', '#operations-exclusive-engines'],
     ['maya', 'Maya DS41F', '.operations-maya-residency'], ['maya-glm', 'Maya GLM', '.operations-maya-glm-residency'],
     ['dwarfstar', 'DwarfStar residency', '.operations-dwarfstar-residency'],
+    ['shared', 'Shared engines', '#operations-shared-engines'],
+    ['strata', 'Strata residency', '.operations-strata-residency'], ['ollama', 'Ollama residency', '.operations-ollama-residency'],
     ['configuration', 'Strata configuration', '.operations-strata-configuration'], ['models', 'Ollama models', '.operations-ollama-control'],
     ['output', 'Logs & details', '.operations-command-output'],
   ],
