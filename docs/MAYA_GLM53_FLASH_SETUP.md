@@ -246,6 +246,8 @@ For comparison, record artifact size about 89.84 GiB, quantization `Maya-S-v2-IQ
 
 ## 8. Optional native MTP and tool checks
 
+**Known Linux reserved-VRAM case:** the first host test with 96 GiB firmware GPU reservation / 30.48 GiB Linux RAM produced an 8.28 GiB expert pool, 9.27 GiB pinned RAM tier and about 3 decode t/s. If startup shows this pattern, follow the [reserved-VRAM fix and rebuild guide](MAYA_GLM53_RESERVED_VRAM_FIX.md) before MTP trials. The fix is opt-in, source-pinned and verifies the active GPU reservation at runtime; it is not needed for normal shared-memory layouts. Do not reduce system headroom to work around this planner mismatch.
+
 After the baseline, stop GLM in Management. Back up its config, then change only the isolated config's native MTP switch:
 
 ```bash
