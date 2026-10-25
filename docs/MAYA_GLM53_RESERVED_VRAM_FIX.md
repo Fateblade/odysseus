@@ -105,6 +105,10 @@ Three Small/mixed/distinct runs at 8192 context, 256 output tokens, temperature 
 
 Relative to the first 3.0 t/s baseline this is about 6.1x native decode, 3.1x prefill and 5.2x end-to-end throughput. However, this successful export used task-set seed **1893222011**, not the original **1494806378**: it is a workload-class comparison, not identical prompts. Reuse **1893222011** for the next MTP-on comparison against this fixed baseline, with the same other settings. All answers reached the output cap, so task quality and longer-context stability remain separate acceptance work. These data do not establish the maximum context or MTP benefit.
 
+### First MTP-on trial
+
+Subsequent MTP-on smoke result: native decode median 26.9 t/s (22.4–28.3 across measured tasks), median per-sample draft acceptance 79.02%, prefill 174 t/s and TTFT 6.310 s at 8192 context. This establishes active native drafting, not a controlled speedup measurement: that export used task-set seed 1521369663 and 647–1444 output tokens, unlike the MTP-off seed 1893222011 / 256 tokens. Compare both modes with an identical explicit task-set seed and output cap before attributing the full rate change to MTP. The fuller result and remaining quality/context acceptance work are recorded in the GLM plan.
+
 ## Roll back
 
 Stop GLM first. In its isolated JSON config set `MAYA_GLM_RESERVED_VRAM` to the string `0`, preserving everything else, then start it again. That selects the original MemAvailable budget even with the patched binary. Alternatively, restore the saved config and binary from the printed backup directory while the service is stopped. Leave the source backup and model files intact. Existing ROCm and DS41F require no rollback.
