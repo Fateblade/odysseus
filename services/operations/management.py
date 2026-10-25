@@ -71,21 +71,57 @@ class Management:
                 "services": self.settings.get("services", {}),
                 "unconfigured_services": [name for name in names if name not in self.settings.get("services", {})],
                 "scripts_enabled": bool(self.settings.get("scripts_root")),
-                "configured": True}
+                "configured": True, **self.control_states()}
+
+    def service_state(self, name):
+        try:
+            result = self.service(name, "state", check=False)
+            fields = dict(line.split("=", 1) for line in result.stdout.decode().splitlines() if "=" in line)
+            active = fields.get("ActiveState")
+            state = "unknown"
+            if result.returncode == 0 and fields.get("LoadState") == "loaded":
+                state = "running" if active == "active" else "stopped" if active in ("inactive", "failed") else "transitioning" if active in ("activating", "deactivating", "reloading", "refreshing") else "unknown"
+            return {"state": state, "active_state": active, "sub_state": fields.get("SubState")}
+        except (OperationsError, OSError, ValueError, subprocess.TimeoutExpired):
+            return {"state": "unknown"}
+
+    def container_states(self):
+        names = self.settings.get("containers", [])
+        result = {name: {"state": "unknown"} for name in names}
+        if not names:
+            return result
+        from services.operations.overview import containers
+        inventory = containers()
+        if inventory.get("status") == "ok":
+            for row in inventory["items"]:
+                if row["name"] in result:
+                    raw = row.get("state")
+                    state = "running" if raw in ("running", "paused") else "stopped" if raw in ("created", "exited") else "transitioning" if raw in ("restarting", "removing") else "unknown"
+                    result[row["name"]] = {"state": state, "docker_state": raw}
+        return result
+
+    def control_states(self):
+        names = self.settings.get("services", {})
+        with ThreadPoolExecutor(max_workers=4) as executor:
+            states = {name: executor.submit(self.service_state, name) for name in names}
+            containers = executor.submit(self.container_states)
+            return {"service_states": {name: future.result() for name, future in states.items()},
+                    "container_states": containers.result()}
 
     def residency(self):
         from services.operations.dwarfstar import inventory
         from services.operations.overview import ollama, strata
         from services.operations.maya import inventory as maya_inventory, glm_inventory
 
-        with ThreadPoolExecutor(max_workers=5) as executor:
+        with ThreadPoolExecutor(max_workers=6) as executor:
+            controls_result = executor.submit(self.control_states)
             strata_result = executor.submit(strata, self.strata_url)
             ollama_result = executor.submit(ollama, self.ollama_url)
             dwarfstar_result = executor.submit(inventory, self.dwarfstar_url, self)
             maya_result = executor.submit(maya_inventory, self.maya_url)
             glm_result = executor.submit(glm_inventory, self.maya_glm_url)
             return {"configured": True, "strata": strata_result.result(),
-                    "ollama": ollama_result.result(), "dwarfstar": dwarfstar_result.result(), "maya": maya_result.result(), "maya_glm": glm_result.result(), "sampled_at": time.time()}
+                    "ollama": ollama_result.result(), "dwarfstar": dwarfstar_result.result(), "maya": maya_result.result(), "maya_glm": glm_result.result(), "sampled_at": time.time(), **controls_result.result()}
 
     def service(self, name, operation, check=True):
         setting = self.settings.get("services", {}).get(name)
@@ -101,11 +137,13 @@ class Management:
             command = ["journalctl", *flags, "-u", unit, "-n", "200", "--no-pager"]
         elif operation == "show":
             command = ["systemctl", *flags, "show", unit, "--property=ExecStart", "--value"]
+        elif operation == "state":
+            command = ["systemctl", *flags, "show", unit, "--property=LoadState,ActiveState,SubState"]
         else:
             command = ["systemctl", *flags, operation, unit, "--no-pager"]
-        if setting.get("sudo") and scope == "system":
+        if setting.get("sudo") and scope == "system" and operation != "state":
             command = ["sudo", "-n", *command]
-        result = subprocess.run(command, capture_output=True, timeout=90)
+        result = subprocess.run(command, capture_output=True, timeout=5 if operation == "state" else 90)
         if check and result.returncode:
             raise OperationsError("The service operation failed. Check the unit and helper user's systemd permissions on the host.", 502)
         return result
@@ -120,6 +158,9 @@ class Management:
                 raise OperationsError("Unknown container operation.")
             if name in self.settings.get("protected_containers", ["odysseus-odysseus-1"]) and operation in ("stop", "restart"):
                 raise OperationsError("This container is protected from dashboard stop/restart.", 403)
+            if operation in ("start", "stop", "restart"):
+                from services.operations.control_state import require_transition
+                require_transition(self.container_states().get(name, {}), operation)
             args = ("logs", "--tail", "200", "--timestamps") if operation == "logs" else (operation,)
             output = docker_command(name, *args)
             return {"status": "ok", "log": output[-65536:].decode(errors="replace") if operation == "logs" else ""}
@@ -130,8 +171,13 @@ class Management:
                 backend = payload["name"]
                 if not getattr(self, backend + "_url") or backend not in self.settings.get("services", {}):
                     raise OperationsError("Configure an explicit systemd unit and endpoint for this allowlisted inference service first.", 503)
+                from services.operations.control_state import require_transition
+                require_transition(self.service_state(backend), operation)
                 from services.operations.jobs import enqueue
                 return enqueue(self, {"kind": "inference_service" if backend == "dwarfstar" else "maya_service", "backend": backend, "operation": operation, "timeout": 900})
+            if operation in ("start", "stop", "restart") and payload.get("name") in self.settings.get("services", {}):
+                from services.operations.control_state import require_transition
+                require_transition(self.service_state(payload["name"]), operation)
             result = self.service(payload.get("name"), operation, check=operation != "status")
             return {"status": "ok", "log": (result.stdout + result.stderr)[-65536:].decode(errors="replace")}
         if target == "strata":

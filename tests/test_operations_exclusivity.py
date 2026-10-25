@@ -49,6 +49,7 @@ def test_dwarfstar_actions_use_the_same_host_queue(tmp_path, monkeypatch):
     path = tmp_path / "management.json"
     path.write_text(json.dumps({"services": {"dwarfstar": "dwarfstar.service"}}))
     host = Management(str(path), "", "", dwarfstar_url="http://dwarfstar")
+    host.service_state = lambda _: {"state": "running"}
     monkeypatch.setattr(jobs, "enqueue", lambda _, spec: spec)
     result = host.execute({"target": "service", "name": "dwarfstar", "operation": "stop"})
     assert result == {"kind": "inference_service", "backend": "dwarfstar", "operation": "stop", "timeout": 900}

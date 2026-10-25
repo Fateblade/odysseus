@@ -49,11 +49,6 @@ export function renderMayaGlm(data) {
   ui.live.append(node('p', data.message || '', 'operations-muted'));
 }
 
-export function configureMayaGlm(services) {
-  if (!ui) return;
-  ui.start.disabled = ui.stop.disabled = !Object.hasOwn(services, 'maya_glm');
-}
-
 export async function refreshMayaGlm(force = false) {
   if (!ui || (!force && (review || (state && (Number(ui.context.value) !== (state.configured_context ?? state.active_context) || ui.drafting.checked !== Boolean(state.drafting)))))) return;
   const version = ++sequence;

@@ -2,7 +2,7 @@ import { selectResourcePanel } from './operationsResources.js?v=20261024resource
 import { notify } from './operationsNotifications.js?v=20261025notifications1';
 import { applyColors, applyFontDensity, getSaved } from './theme.js';
 import { closeOverview, openOverview } from './operationsOverview.js?v=20261025notifications1';
-import { openManagement, closeManagement } from './operationsManagement.js?v=20261025notifications1';
+import { openManagement, closeManagement } from './operationsManagement.js?v=20261025controls1';
 import { showSections, panelForSectionHash } from './operationsNavigation.js?v=20261025notifications1';
 import { openAudit } from './operationsAudit.js?v=20261025notifications1';
 

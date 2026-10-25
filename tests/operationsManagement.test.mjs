@@ -19,7 +19,7 @@ function harness() {
   const notifications = [];
   const context = vm.createContext({ document: { getElementById: element }, pending, notify(message, options) { notifications.push({ message, options }); }, resetNotification() {} });
   vm.runInContext(source, context);
-  vm.runInContext(`active = 'management'; request = () => pending;`, context);
+  vm.runInContext(`active = 'management'; request = () => pending; updateResourceControls = () => {};`, context);
   element('operations-maya-context').value = '8192';
   element('operations-maya-drafting').value = 'Off';
   return { element, resolve, reject, notifications, run: code => vm.runInContext(code, context) };
@@ -82,4 +82,37 @@ test('background updates stay quiet even while a user action overlaps polling', 
   const h = harness();
   h.run("busy = true; polling = true; status('Recent jobs', false, true); status('Benchmark started.');");
   assert.deepEqual(h.notifications.map(item => item.message), ['Benchmark started.']);
+});
+
+test('start is allowed only when stopped; stop and restart only when running', () => {
+  const h = harness();
+  for (const state of ['running', 'stopped', 'transitioning', 'unknown', 'pending']) {
+    assert.equal(h.run(`canControl('start', '${state}')`), state === 'stopped');
+    assert.equal(h.run(`canControl('stop', '${state}')`), state === 'running');
+    assert.equal(h.run(`canControl('restart', '${state}')`), state === 'running');
+    assert.equal(h.run(`canControl('logs', '${state}')`), true);
+  }
+});
+
+test('stale readings become unknown and pending jobs override sampled state', () => {
+  const h = harness();
+  h.run("serviceStates = {maya: {state: 'running'}}; controlSampledAt = Date.now();");
+  assert.equal(h.run("controlState('service', 'maya')"), 'running');
+  h.run('controlSampledAt = Date.now() - 15001;');
+  assert.equal(h.run("controlState('service', 'maya')"), 'unknown');
+  h.run("pendingControls.set('service:maya', {id:'job'});");
+  assert.equal(h.run("controlState('service', 'maya')"), 'pending');
+});
+
+test('terminal jobs release controls, malformed job state keeps them locked', async () => {
+  for (const state of ['completed', 'failed', 'timed_out', 'cancelled', 'unexpected']) {
+    const h = harness();
+    h.run("pendingControls.set('service:maya', {id:'job', operation:'stop'});");
+    const refresh = h.run('refreshPendingControls().then(ready => { globalThis.finished = ready; })');
+    h.resolve({ job: { state } });
+    await refresh;
+    assert.equal(h.run("controlState('service', 'maya')"), 'pending', 'Terminal jobs stay locked until a fresh sample is ready');
+    h.run('settlePendingControls(finished)');
+    assert.equal(h.run("pendingControls.has('service:maya')"), state === 'unexpected');
+  }
 });

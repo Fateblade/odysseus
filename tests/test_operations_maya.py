@@ -224,6 +224,7 @@ def test_service_job_waits_for_readiness(maya_server):
     base, requests, _ = maya_server
     commands = []
     management = SimpleNamespace(maya_url=base,
+                                 service_state=lambda _: {"state": "stopped"},
                                  residency=lambda: {"strata": {}, "ollama": {}, "dwarfstar": {}},
                                  service=lambda *args: commands.append(args) or SimpleNamespace(stdout=b"", stderr=b""))
     result = maya.run_service(management, {"operation": "start"})

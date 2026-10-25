@@ -21,6 +21,8 @@ def run_service(management, specification):
     if operation in ("start", "restart"):
         from services.operations.exclusivity import ensure_available
         ensure_available(management, backend)
+    from services.operations.control_state import require_transition
+    require_transition(management.service_state(backend), operation)
     result = management.service(backend, operation)
     if operation in ("start", "restart"):
         deadline = time.monotonic() + 600

@@ -1,4 +1,4 @@
-import { initializeMayaGlm, renderMayaGlm, configureMayaGlm, refreshMayaGlm, selectedGlmModel } from './operationsMayaGlm.js?v=20261025notifications1';
+import { initializeMayaGlm, renderMayaGlm, refreshMayaGlm, selectedGlmModel } from './operationsMayaGlm.js?v=20261025controls1';
 import { initializeBenchmark, setBenchmarkCatalog, refreshBenchmarkLimits } from './operationsBenchmark.js?v=20261025notifications1';
 import { initializeScoreboard, refreshScoreboard } from './operationsScoreboard.js?v=20261025notifications1';
 import { notify, resetNotification } from './operationsNotifications.js?v=20261025notifications1';
@@ -19,6 +19,85 @@ let dwarfstarAliases = [];
 let dwarfstarState = null;
 let dwarfstarReview = null;
 let residencyVersion = 0;
+let configuredServices = {};
+let configuredContainers = [];
+let protectedContainers = [];
+let serviceStates = {};
+let containerStates = {};
+let controlSampledAt = 0;
+const pendingControls = new Map();
+
+function canControl(operation, state) {
+  return operation === 'start' ? state === 'stopped' : ['stop', 'restart'].includes(operation) ? state === 'running' : true;
+}
+
+function controlState(target, name) {
+  if (pendingControls.has(`${target}:${name}`)) return 'pending';
+  if (!controlSampledAt || Date.now() - controlSampledAt > 15000) return 'unknown';
+  return (target === 'service' ? serviceStates : containerStates)[name]?.state || 'unknown';
+}
+
+function updateResourceControls() {
+  for (const control of document.querySelectorAll('[data-resource-operation]')) {
+    const target = control.dataset.resourceTarget;
+    const name = control.dataset.resourceName || el(`operations-${target}-name`).value;
+    const operation = control.dataset.resourceOperation;
+    const configured = target === 'service' ? Object.hasOwn(configuredServices, name) : configuredContainers.includes(name);
+    const state = controlState(target, name);
+    const protectedTarget = target === 'docker' && protectedContainers.includes(name) && ['stop', 'restart'].includes(operation);
+    control.disabled = !configured || protectedTarget || !canControl(operation, state);
+    control.title = !configured ? 'Not configured for host control.' : protectedTarget ? 'Protected dashboard container.' :
+      state === 'pending' && ['start', 'stop', 'restart'].includes(operation) ? 'A host operation is pending.' :
+      control.disabled ? `Cannot ${operation}: ${state === 'unknown' ? 'waiting for a confirmed current state' : state}.` : '';
+  }
+  const select = el('operations-service-name');
+  const setting = configuredServices[select.value];
+  el('operations-service-configuration-note').textContent = setting ?
+    `Configured unit: ${typeof setting === 'string' ? setting : setting.unit} (${typeof setting === 'string' ? 'user' : setting.scope || 'user'} scope). State: ${controlState('service', select.value)}.` :
+    'Configure an allowlisted host service to enable its controls.';
+  el('operations-docker-state-note').textContent = select ? `Container state: ${controlState('docker', el('operations-docker-name').value)}.` : '';
+  for (const name of ['maya', 'maya_glm', 'dwarfstar']) {
+    const note = el(`operations-${name.replaceAll('_', '-')}-service-state`);
+    if (note) note.textContent = `Service: ${controlState('service', name)}.`;
+  }
+}
+
+function sampleControls(data, started) {
+  serviceStates = data.service_states || {};
+  containerStates = data.container_states || {};
+  controlSampledAt = started;
+  updateResourceControls();
+}
+
+function trackServiceJob(name, result, operation = 'settings') {
+  pendingControls.set(`service:${name}`, { id: result.job.id, operation });
+  updateResourceControls();
+}
+
+async function refreshPendingControls() {
+  const completed = await Promise.all([...pendingControls].map(async ([key, pending]) => {
+    if (!pending.id) return;
+    try {
+      const result = await request('jobs/detail', { id: pending.id });
+      if (pendingControls.get(key) !== pending || ['queued', 'running'].includes(result.job.state)) return;
+      if (!['completed', 'failed', 'interrupted', 'timed_out', 'cancelled'].includes(result.job.state)) throw new Error('Unknown host job state.');
+      return { key, pending, job: result.job };
+    } catch (error) {
+      notify(`Service operation state unavailable: ${error.message}`, { severity: 'error', key: `control-job:${pending.id}` });
+    }
+  }));
+  return completed.filter(Boolean);
+}
+
+function settlePendingControls(completed) {
+  for (const { key, pending, job } of completed) {
+    if (pendingControls.get(key) !== pending) continue;
+    pendingControls.delete(key);
+    const failed = ['failed', 'interrupted', 'timed_out'].includes(job.state);
+    notify(`${key.split(':')[1]} ${pending.operation}: ${job.state}.${failed && job.error ? ` ${job.error}` : ''}`,
+      { severity: failed ? 'error' : job.state === 'cancelled' ? 'warning' : 'status' });
+  }
+}
 
 function node(tag, text = '', className = '') {
   const item = document.createElement(tag);
@@ -70,10 +149,13 @@ function engineControls(card, name) {
   for (const operation of ['start', 'stop']) {
     const control = button(operation === 'start' ? 'Start' : 'Stop', () => task(() => manage({ target: 'service', name, operation })));
     control.id = `operations-${name.replaceAll('_', '-')}-${operation}`; control.disabled = true;
+    Object.assign(control.dataset, { resourceTarget: 'service', resourceName: name, resourceOperation: operation });
     controls[operation] = control; row.append(control);
   }
   row.append(button('Refresh status', () => task(refreshResidency)), button('Logs', () => task(() => manage({ target: 'service', name, operation: 'logs' }))));
   card.insertBefore(row, card.children[2] || null);
+  const note = node('p', 'Service: unknown.', 'operations-muted'); note.id = `operations-${name.replaceAll('_', '-')}-service-state`;
+  row.after(note);
   return controls;
 }
 
@@ -166,13 +248,19 @@ function renderResidency(data) {
 
 async function refreshResidency() {
   const version = ++residencyVersion;
+  let started = Date.now();
   try {
-    const result = await request('residency');
+    let result = await request('residency');
+    const completed = await refreshPendingControls();
+    if (completed.length) { started = Date.now(); result = await request('residency'); }
     if (version !== residencyVersion) return;
+    settlePendingControls(completed);
     renderResidency(result);
+    sampleControls(result, started);
     resetNotification('management:residency');
   } catch (error) {
     if (version !== residencyVersion) return;
+    serviceStates = {}; containerStates = {}; controlSampledAt = 0; updateResourceControls();
     notify(`Live refresh failed: ${error.message}`, { severity: 'error', key: 'management:residency' });
     renderResidency({ strata: { message: error.message } });
     for (const id of ['operations-strata-sampled', 'operations-ollama-sampled', 'operations-dwarfstar-sampled', 'operations-maya-sampled', 'operations-maya-glm-sampled']) el(id).textContent = `Live refresh failed: ${error.message}`;
@@ -243,7 +331,21 @@ async function manage(payload) {
       return;
     }
   }
-  const result = await request('manage', payload);
+  const key = ['service', 'docker'].includes(payload.target) && ['start', 'stop', 'restart'].includes(payload.operation) ? `${payload.target}:${payload.name}` : null;
+  if (key) { pendingControls.set(key, { operation: payload.operation }); updateResourceControls(); }
+  let result;
+  try {
+    result = await request('manage', payload);
+    if (key && result.job) pendingControls.set(key, { id: result.job.id, operation: payload.operation });
+    else if (key) {
+      pendingControls.delete(key);
+      (payload.target === 'service' ? serviceStates : containerStates)[payload.name] = { state: 'unknown' };
+      updateResourceControls();
+    }
+  } catch (error) {
+    if (key) { pendingControls.delete(key); serviceStates = {}; containerStates = {}; controlSampledAt = 0; updateResourceControls(); }
+    throw error;
+  }
   status(result.job ? 'Host job started. Follow its progress in Scripts & TPS tests.' : 'Operation completed.');
   if (result.log !== undefined) el('operations-management-output').textContent = result.log || 'No log output.';
   if (result.details && payload.target === 'ollama' && payload.operation === 'show') modelSummary(payload.name, result.details);
@@ -261,6 +363,7 @@ function controls(parent, title, target, options, operations) {
   operations.forEach(operation => {
     const control = button(operation, () => task(() => manage({ target, name: input.value, operation })));
     control.dataset.hostControl = 'true';
+    Object.assign(control.dataset, { resourceTarget: target, resourceOperation: operation });
     row.append(control);
   });
   card.append(row);
@@ -283,6 +386,8 @@ function initialize() {
   const serviceNote = node('p', '', 'operations-muted');
   serviceNote.id = 'operations-service-configuration-note';
   el('operations-service-name').closest('section').append(serviceNote);
+  const dockerNote = node('p', '', 'operations-muted'); dockerNote.id = 'operations-docker-state-note';
+  el('operations-docker-name').closest('section').append(dockerNote);
   const strata = section(content, 'Strata residency', 'Load the configured model into memory, or release it while keeping the server available. Active requests are not forcibly stopped.', 'operations-strata-residency');
   const strataLive = node('div', 'Reading live status…');
   strataLive.id = 'operations-strata-live';
@@ -311,6 +416,7 @@ function initialize() {
     const result = await request('maya/apply', { revision: mayaReview.revision, context: mayaReview.context, ...(mayaReview.managed_settings ? { drafting: mayaReview.drafting } : {}), review_digest: mayaReview.review_digest });
     mayaReview = null; mayaState = null; mayaApply.disabled = true; mayaChange.hidden = true;
     selectedJob = result.job.id; status('Maya settings job queued. Inspect its progress in Scripts & TPS tests.');
+    trackServiceJob('maya', result);
   }));
   mayaApply.id = 'operations-maya-apply'; mayaApply.disabled = true;
   mayaFields.append(button('Review changes', () => task(async () => {
@@ -323,7 +429,7 @@ function initialize() {
   mayaContext.addEventListener('input', () => { mayaReview = null; mayaApply.disabled = true; mayaChange.hidden = true; });
   mayaDrafting.addEventListener('change', () => { mayaReview = null; mayaApply.disabled = true; mayaChange.hidden = true; });
   maya.append(mayaStatus, button('Reload settings', () => task(loadMaya)), mayaFields);
-  initializeMayaGlm(content, { section, field, toggle, engineControls, button, node, task, request, manage, refreshResidency, confirmOperation, started: result => { selectedJob = result.job.id; status('GLM settings job queued. Inspect its progress in Scripts & TPS tests.'); } });
+  initializeMayaGlm(content, { section, field, toggle, engineControls, button, node, task, request, manage, refreshResidency, confirmOperation, started: result => { selectedJob = result.job.id; trackServiceJob('maya_glm', result); status('GLM settings job queued. Inspect its progress in Scripts & TPS tests.'); } });
   const dwarfstar = section(content, 'DwarfStar', 'DeepSeek V4 Flash · DwarfStar', 'operations-dwarfstar-residency');
   const dwarfstarLive = node('div', 'Reading live status…');
   dwarfstarLive.id = 'operations-dwarfstar-live';
@@ -348,6 +454,7 @@ function initialize() {
     dwarfstarReview = null; dwarfstarState = null; dwarfstarApply.disabled = true;
     dwarfstarChange.hidden = true;
     selectedJob = result.job.id;
+    trackServiceJob('dwarfstar', result);
     status('Context job queued. Inspect its progress and result in Scripts & TPS tests.');
   }));
   dwarfstarApply.id = 'operations-dwarfstar-apply';
@@ -534,29 +641,20 @@ function options(input, values) {
 }
 
 async function refreshManagement() {
+  const started = Date.now();
   const result = await request('management');
   el('operations-management-content').hidden = false;
-  options(el('operations-docker-name'), result.containers || []);
-  const services = result.services || {};
-  configureMayaGlm(services);
-  for (const operation of ['start', 'stop']) el(`operations-dwarfstar-${operation}`).disabled = !Object.hasOwn(services, 'dwarfstar');
-  for (const operation of ['start', 'stop']) el(`operations-maya-${operation}`).disabled = !Object.hasOwn(services, 'maya');
+  configuredServices = result.services || {};
+  configuredContainers = result.containers || [];
+  protectedContainers = result.protected_containers || ['odysseus-odysseus-1'];
+  options(el('operations-docker-name'), configuredContainers);
   const missing = result.unconfigured_services || [];
   const serviceSelect = el('operations-service-name');
-  options(serviceSelect, [...Object.keys(services), ...missing]);
+  options(serviceSelect, [...Object.keys(configuredServices), ...missing]);
   for (const option of serviceSelect.options) if (missing.includes(option.value)) option.textContent = `${option.value} (not configured)`;
-  const updateService = () => {
-    const configured = Object.hasOwn(services, serviceSelect.value);
-    serviceSelect.closest('section').querySelectorAll('[data-host-control]').forEach(control => { control.disabled = !configured; });
-    const setting = services[serviceSelect.value];
-    el('operations-service-configuration-note').textContent = configured ?
-      `Configured unit: ${typeof setting === 'string' ? setting : setting.unit} (${typeof setting === 'string' ? 'user' : setting.scope || 'user'} scope).` :
-      `${serviceSelect.value || 'Service'} controls are not configured in the host management JSON. For native Ollama, verify ollama.service and configure its system scope and service permissions. Model inventory and residency work independently.`;
-  };
-  serviceSelect.onchange = updateService;
-  updateService();
-  const dockerSelect = el('operations-docker-name');
-  dockerSelect.closest('section').querySelectorAll('[data-host-control]').forEach(control => { control.disabled = !dockerSelect.options.length; });
+  serviceSelect.onchange = updateResourceControls;
+  el('operations-docker-name').onchange = updateResourceControls;
+  sampleControls(result, started);
   status(result.demo ? 'Preview data — controls are simulated.' : 'Host controls ready.');
   const draft = strataState && (el('operations-strata-quantization').value !== strataState.model || Number(el('operations-strata-context').value) !== strataState.configured_context);
   if (!strataState || (!draft && !strataReview)) await loadStrata();
@@ -699,6 +797,7 @@ async function refreshJobs(background = false) {
 }
 
 async function poll() {
+  updateResourceControls();
   if (!active || document.hidden || polling || busy) return;
   polling = true;
   try {
