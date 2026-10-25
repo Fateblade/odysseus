@@ -278,3 +278,10 @@ In Models & routing, add an explicit alias such as `pa-glm-flash` with LiteLLM m
 Stop GLM through Management and confirm `maya-glm53.service` and its child engine exited. Leave its source/models available for inspection; no deletion is needed. Restart DS41F or the previous control explicitly and verify its original endpoint. Remove only the `maya_glm` service/setup and endpoint additions from configuration if disabling this integration, preserving all other entries; remove the optional gateway route and monitor argument through their reviewed procedures.
 
 If reverting the dashboard branch/image, preserve newer application data and the saved private configuration first. The GLM service is not boot-enabled by this guide. Its unit, checkout and artifacts do not replace the working ROCm stack or DS41F files. Local fixture tests for this integration are not a substitute for the device's startup, sustained memory, tool correctness and task-quality checks.
+
+
+### Shared engine controls
+
+Management now shows one full-width Strata card and one full-width Ollama card. Residency is on the left; Strata configuration or Ollama model management is on the right. Narrow screens stack the two panes. Server Start, Stop, Restart, Refresh status, Service status and Logs live on each engine card, replacing the separate Inference servers selector. Unconfigured units keep host controls disabled.
+
+Strata Load model is enabled only after a fresh unloaded reading; Unload model requires a fresh loaded reading. Unknown, stale and pending states disable both. Queued residency changes lock service mutations until completion and a fresh status sample. The host checks residency before queueing and again before execution. Existing benchmark records and backend configuration remain compatible.

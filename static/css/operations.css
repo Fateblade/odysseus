@@ -267,3 +267,15 @@ body.operations-page { --operations-muted: color-mix(in srgb, var(--fg) 68%, var
 .operations-notification-close:hover { background: color-mix(in srgb, var(--fg) 10%, transparent); }
 .operations-notification-close:focus-visible { outline: 2px solid var(--fg); outline-offset: -2px; }
 @media (max-width: 700px) { .operations-notifications { right: 12px; bottom: max(12px, env(safe-area-inset-bottom)); width: calc(100vw - 24px); max-height: 60dvh; } }
+
+.operations-shared-grid { grid-template-columns: minmax(0, 1fr); }
+.operations-engine-actions { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 16px; }
+.operations-engine-actions button { margin: 0; }
+.operations-engine-columns { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 24px; }
+.operations-engine-columns > .operations-engine-pane { grid-column: auto; grid-row: auto; min-width: 0; padding: 0; border: 0; background: transparent; }
+.operations-engine-pane + .operations-engine-pane { padding-left: 24px; border-left: 1px solid var(--border); }
+.operations-control-docker { grid-column: 1 / -1; }
+@media (max-width: 900px) {
+  .operations-engine-columns { grid-template-columns: minmax(0, 1fr); }
+  .operations-engine-pane + .operations-engine-pane { padding-left: 0; padding-top: 24px; border-left: 0; border-top: 1px solid var(--border); }
+}

@@ -47,6 +47,8 @@ def perform(folder, management, specification):
         if specification["operation"] == "load":
             from services.operations.exclusivity import ensure_available
             ensure_available(management, "strata")
+        from services.operations.control_state import require_strata_transition
+        require_strata_transition(management.strata_url, specification["operation"])
         result = api(management.strata_url, "/" + specification["operation"], {}, timeout=290)
         if result.get("status") in ("busy", "unsupported"):
             raise RuntimeError("Strata cannot change model residency while busy or unsupported.")

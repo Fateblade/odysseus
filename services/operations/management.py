@@ -184,6 +184,8 @@ class Management:
             if operation not in ("load", "unload"):
                 raise OperationsError("Unknown Strata model operation.")
             from services.operations.jobs import enqueue
+            from services.operations.control_state import require_strata_transition
+            require_strata_transition(self.strata_url, operation)
             return enqueue(self, {"kind": "strata", "operation": operation, "timeout": 300})
         if target == "ollama":
             name = model_name(payload.get("name"))

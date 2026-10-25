@@ -116,3 +116,21 @@ test('terminal jobs release controls, malformed job state keeps them locked', as
     assert.equal(h.run("pendingControls.has('service:maya')"), state === 'unexpected');
   }
 });
+
+test('Strata load and unload require confirmed opposite residency', () => {
+  const h = harness();
+  for (const state of ['loaded', 'unloaded', 'unknown', 'pending']) {
+    assert.equal(h.run(`canControl('load', '${state}')`), state === 'unloaded');
+    assert.equal(h.run(`canControl('unload', '${state}')`), state === 'loaded');
+  }
+  assert.equal(h.run("strataModelState({status:'unavailable',loaded:false})"), 'unknown');
+  assert.equal(h.run("strataModelState({status:'ok',loaded:false})"), 'unloaded');
+  assert.equal(h.run("strataModelState({status:'ok',loaded:true})"), 'loaded');
+  assert.equal(h.run("strataModelState({status:'ok',loaded:null})"), 'unknown');
+});
+
+test('pending Strata residency blocks service mutations too', () => {
+  const h = harness();
+  h.run("serviceStates = {strata:{state:'running'}}; controlSampledAt = Date.now(); pendingControls.set('strata:model',{id:'load-job'});");
+  assert.equal(h.run("controlState('service','strata')"), 'pending');
+});

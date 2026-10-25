@@ -75,3 +75,28 @@ def test_system_service_state_reads_do_not_require_mutation_sudo(tmp_path, monke
     monkeypatch.setattr(module.subprocess, "run", lambda command, **kw: calls.append((command, kw)) or SimpleNamespace(returncode=0, stdout=b"LoadState=loaded\nActiveState=active\n"))
     assert host.service_state("ollama")["state"] == "running"
     assert calls[0][0][0] == "systemctl" and calls[0][1]["timeout"] == 5
+
+
+@pytest.mark.parametrize("loaded", [True, False, None])
+@pytest.mark.parametrize("operation", ["load", "unload"])
+def test_strata_mutations_require_confirmed_opposite_residency(monkeypatch, loaded, operation):
+    from services.operations import management
+    from services.operations.control_state import require_strata_transition
+    monkeypatch.setattr(management, "api", lambda *args, **kwargs: {"status": "ok", "loaded": loaded})
+    if isinstance(loaded, bool) and loaded == (operation == "unload"):
+        require_strata_transition("http://strata", operation)
+    else:
+        with pytest.raises(OperationsError, match="Cannot " + operation):
+            require_strata_transition("http://strata", operation)
+
+
+def test_strata_state_is_rechecked_before_queueing(monkeypatch):
+    from services.operations import jobs, management
+    host = Management(None, "http://strata", "")
+    def health(base, path, body, **kwargs):
+        assert path == "/health" and kwargs["method"] == "GET"
+        return {"status": "ok", "loaded": True}
+    monkeypatch.setattr(management, "api", health)
+    monkeypatch.setattr(jobs, "enqueue", lambda *_: pytest.fail("Redundant load must not be queued"))
+    with pytest.raises(OperationsError, match="Cannot load"):
+        host.execute({"target": "strata", "operation": "load"})

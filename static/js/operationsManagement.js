@@ -25,14 +25,21 @@ let protectedContainers = [];
 let serviceStates = {};
 let containerStates = {};
 let controlSampledAt = 0;
+let strataResidency = {};
 const pendingControls = new Map();
 
+function strataModelState(value) {
+  return value.status === 'ok' && typeof value.loaded === 'boolean' ? value.loaded ? 'loaded' : 'unloaded' : 'unknown';
+}
+
 function canControl(operation, state) {
+  if (operation === 'load') return state === 'unloaded';
+  if (operation === 'unload') return state === 'loaded';
   return operation === 'start' ? state === 'stopped' : ['stop', 'restart'].includes(operation) ? state === 'running' : true;
 }
 
 function controlState(target, name) {
-  if (pendingControls.has(`${target}:${name}`)) return 'pending';
+  if (pendingControls.has(`${target}:${name}`) || target === 'service' && name === 'strata' && pendingControls.has('strata:model')) return 'pending';
   if (!controlSampledAt || Date.now() - controlSampledAt > 15000) return 'unknown';
   return (target === 'service' ? serviceStates : containerStates)[name]?.state || 'unknown';
 }
@@ -50,19 +57,24 @@ function updateResourceControls() {
       state === 'pending' && ['start', 'stop', 'restart'].includes(operation) ? 'A host operation is pending.' :
       control.disabled ? `Cannot ${operation}: ${state === 'unknown' ? 'waiting for a confirmed current state' : state}.` : '';
   }
-  const select = el('operations-service-name');
-  const setting = configuredServices[select.value];
-  el('operations-service-configuration-note').textContent = setting ?
-    `Configured unit: ${typeof setting === 'string' ? setting : setting.unit} (${typeof setting === 'string' ? 'user' : setting.scope || 'user'} scope). State: ${controlState('service', select.value)}.` :
-    'Configure an allowlisted host service to enable its controls.';
-  el('operations-docker-state-note').textContent = select ? `Container state: ${controlState('docker', el('operations-docker-name').value)}.` : '';
-  for (const name of ['maya', 'maya_glm', 'dwarfstar']) {
+  el('operations-docker-state-note').textContent = `Container state: ${controlState('docker', el('operations-docker-name').value)}.`;
+  for (const name of ['maya', 'maya_glm', 'dwarfstar', 'strata', 'ollama']) {
     const note = el(`operations-${name.replaceAll('_', '-')}-service-state`);
-    if (note) note.textContent = `Service: ${controlState('service', name)}.`;
+    const setting = configuredServices[name];
+    if (note) note.textContent = setting ? `Service: ${controlState('service', name)}. Unit: ${typeof setting === 'string' ? setting : setting.unit}.` : 'Service control is not configured on the host.';
+  }
+  for (const operation of ['load', 'unload']) {
+    const control = el(`operations-strata-${operation}`);
+    if (!control) continue;
+    const state = pendingControls.has('strata:model') || pendingControls.has('service:strata') ? 'pending' :
+      controlSampledAt && Date.now() - controlSampledAt <= 15000 ? strataModelState(strataResidency) : 'unknown';
+    control.disabled = !canControl(operation, state);
+    control.title = control.disabled ? `Cannot ${operation}: model ${state}.` : '';
   }
 }
 
 function sampleControls(data, started) {
+  strataResidency = data.strata || {};
   serviceStates = data.service_states || {};
   containerStates = data.container_states || {};
   controlSampledAt = started;
@@ -146,13 +158,19 @@ function toggle(parent, id, title) {
 function engineControls(card, name) {
   const row = node('div', '', 'cookbook-actions operations-engine-actions');
   const controls = {};
-  for (const operation of ['start', 'stop']) {
-    const control = button(operation === 'start' ? 'Start' : 'Stop', () => task(() => manage({ target: 'service', name, operation })));
+  for (const operation of ['start', 'stop', 'restart']) {
+    const control = button(operation[0].toUpperCase() + operation.slice(1), () => task(() => manage({ target: 'service', name, operation })));
     control.id = `operations-${name.replaceAll('_', '-')}-${operation}`; control.disabled = true;
     Object.assign(control.dataset, { resourceTarget: 'service', resourceName: name, resourceOperation: operation });
     controls[operation] = control; row.append(control);
   }
-  row.append(button('Refresh status', () => task(refreshResidency)), button('Logs', () => task(() => manage({ target: 'service', name, operation: 'logs' }))));
+  row.append(button('Refresh status', () => task(refreshResidency)));
+  for (const operation of ['status', 'logs']) {
+    const control = button(operation === 'status' ? 'Service status' : 'Logs', () => task(() => manage({ target: 'service', name, operation })));
+    control.disabled = true;
+    Object.assign(control.dataset, { resourceTarget: 'service', resourceName: name, resourceOperation: operation });
+    row.append(control);
+  }
   card.insertBefore(row, card.children[2] || null);
   const note = node('p', 'Service: unknown.', 'operations-muted'); note.id = `operations-${name.replaceAll('_', '-')}-service-state`;
   row.after(note);
@@ -331,7 +349,8 @@ async function manage(payload) {
       return;
     }
   }
-  const key = ['service', 'docker'].includes(payload.target) && ['start', 'stop', 'restart'].includes(payload.operation) ? `${payload.target}:${payload.name}` : null;
+  const key = payload.target === 'strata' && ['load', 'unload'].includes(payload.operation) ? 'strata:model' :
+    ['service', 'docker'].includes(payload.target) && ['start', 'stop', 'restart'].includes(payload.operation) ? `${payload.target}:${payload.name}` : null;
   if (key) { pendingControls.set(key, { operation: payload.operation }); updateResourceControls(); }
   let result;
   try {
@@ -382,10 +401,6 @@ function initialize() {
   content.hidden = true;
   management.append(content);
   controls(content, 'Docker containers', 'docker', [], ['start', 'stop', 'restart', 'logs']);
-  controls(content, 'Inference servers', 'service', [], ['status', 'start', 'stop', 'restart', 'logs']);
-  const serviceNote = node('p', '', 'operations-muted');
-  serviceNote.id = 'operations-service-configuration-note';
-  el('operations-service-name').closest('section').append(serviceNote);
   const dockerNote = node('p', '', 'operations-muted'); dockerNote.id = 'operations-docker-state-note';
   el('operations-docker-name').closest('section').append(dockerNote);
   const strata = section(content, 'Strata residency', 'Load the configured model into memory, or release it while keeping the server available. Active requests are not forcibly stopped.', 'operations-strata-residency');
@@ -395,8 +410,10 @@ function initialize() {
   strataSampled.id = 'operations-strata-sampled';
   strata.append(strataLive, strataSampled);
   const strataActions = node('div', '', 'cookbook-actions');
-  strataActions.append(button('Refresh status', () => task(refreshResidency)));
-  ['load', 'unload'].forEach(operation => strataActions.append(button(operation, () => task(() => manage({ target: 'strata', operation })))));
+  ['load', 'unload'].forEach(operation => {
+    const control = button(operation === 'load' ? 'Load model' : 'Unload model', () => task(() => manage({ target: 'strata', operation })));
+    control.id = `operations-strata-${operation}`; control.disabled = true; strataActions.append(control);
+  });
   strata.append(strataActions);
   const maya = section(content, 'Maya DS41F', 'DeepSeek V4.1 Flash · Maya-XS', 'operations-maya-residency');
   const mayaLive = node('div', 'Reading live status…'); mayaLive.id = 'operations-maya-live';
@@ -510,6 +527,7 @@ function initialize() {
     if (!strataReview) throw new Error('Review the setup command first.');
     if (!await confirmOperation(`Configure Strata ${strataReview.model} with ${strataReview.context} tokens? The managed server will stop while setup runs. Configuration and launcher backups are saved; setup downloads/builds cannot be rolled back.`)) return;
     const result = await request('strata/apply', { revision: strataReview.revision, context: strataReview.context, model: strataReview.model, review_digest: strataReview.review_digest });
+    trackServiceJob('strata', result);
     strataReview = null; strataState = null; apply.disabled = true;
     selectedJob = result.job.id;
     el('operations-jobs-tab').click();
@@ -545,7 +563,7 @@ function initialize() {
   ollamaLive.id = 'operations-ollama-live';
   const ollamaSampled = node('p', '', 'operations-muted');
   ollamaSampled.id = 'operations-ollama-sampled';
-  loaded.append(ollamaLive, ollamaSampled, button('Refresh loaded models', () => task(refreshResidency)));
+  loaded.append(ollamaLive, ollamaSampled);
   content.insertBefore(loaded, configuration);
   const outputSection = section(content, 'Logs & model details', 'Select logs, service status or model details to inspect the response.', 'operations-command-output');
   const output = node('pre', 'Select logs, status or model details.', 'operations-diff');
@@ -560,7 +578,17 @@ function initialize() {
   const shared = node('div', '', 'operations-engine-group operations-shared-engines'); shared.id = 'operations-shared-engines';
   shared.append(node('h2', 'Shared engines'), node('p', 'Ollama and Strata can share the available memory. Keep exclusive engines stopped while using these models.', 'operations-muted'));
   const sharedGrid = node('div', '', 'operations-shared-grid');
-  content.insertBefore(shared, strata); sharedGrid.append(strata, loaded, configuration, models); shared.append(sharedGrid);
+  content.insertBefore(shared, strata);
+  for (const [name, title, residency, settings] of [['strata', 'Strata', strata, configuration], ['ollama', 'Ollama', loaded, models]]) {
+    const card = section(sharedGrid, title, name === 'strata' ? 'Manage the server, model residency and runtime configuration.' : 'Manage the server, loaded models and installed model files.', 'operations-shared-engine');
+    engineControls(card, name);
+    const columns = node('div', '', 'operations-engine-columns');
+    for (const [panel, heading] of [[residency, 'Residency'], [settings, name === 'strata' ? 'Configuration' : 'Models']]) {
+      panel.classList.add('operations-engine-pane'); panel.querySelector('h2').replaceWith(node('h3', heading));
+    }
+    columns.append(residency, settings); card.append(columns);
+  }
+  shared.append(sharedGrid);
 
   const jobs = el('operations-jobs-panel');
   const message = node('p', '', 'operations-status');
@@ -648,11 +676,6 @@ async function refreshManagement() {
   configuredContainers = result.containers || [];
   protectedContainers = result.protected_containers || ['odysseus-odysseus-1'];
   options(el('operations-docker-name'), configuredContainers);
-  const missing = result.unconfigured_services || [];
-  const serviceSelect = el('operations-service-name');
-  options(serviceSelect, [...Object.keys(configuredServices), ...missing]);
-  for (const option of serviceSelect.options) if (missing.includes(option.value)) option.textContent = `${option.value} (not configured)`;
-  serviceSelect.onchange = updateResourceControls;
   el('operations-docker-name').onchange = updateResourceControls;
   sampleControls(result, started);
   status(result.demo ? 'Preview data — controls are simulated.' : 'Host controls ready.');
