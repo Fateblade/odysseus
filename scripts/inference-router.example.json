@@ -1,0 +1,28 @@
+{
+  "management_config": "/home/seth/.config/odysseus-operations/management.json",
+  "port": 8094,
+  "backends": {
+    "strata": "http://127.0.0.1:8081",
+    "ollama": "http://127.0.0.1:11434",
+    "dwarfstar": "http://127.0.0.1:8000",
+    "maya": "http://127.0.0.1:8092",
+    "maya_glm": "http://127.0.0.1:8093"
+  },
+  "routes": {
+    "local-ds41f": {
+      "backend": "maya",
+      "model": "deepseek-v4.1-flash",
+      "keep_alive_seconds": 600
+    },
+    "local-glm53": {
+      "backend": "maya_glm",
+      "model": "glm-5.3-flash",
+      "keep_alive_seconds": 600
+    },
+    "local-ds4": {
+      "backend": "dwarfstar",
+      "model": "deepseek-v4-flash",
+      "keep_alive_seconds": 600
+    }
+  }
+}

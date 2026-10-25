@@ -285,3 +285,6 @@ If reverting the dashboard branch/image, preserve newer application data and the
 Management now shows one full-width Strata card and one full-width Ollama card. Residency is on the left; Strata configuration or Ollama model management is on the right. Narrow screens stack the two panes. Server Start, Stop, Restart, Refresh status, Service status and Logs live on each engine card, replacing the separate Inference servers selector. Unconfigured units keep host controls disabled.
 
 Strata Load model is enabled only after a fresh unloaded reading; Unload model requires a fresh loaded reading. Unknown, stale and pending states disable both. Queued residency changes lock service mutations until completion and a fresh status sample. The host checks residency before queueing and again before execution. Existing benchmark records and backend configuration remain compatible.
+
+
+For automatic loading, coordinated model switching and per-route idle retention, use the [on-demand inference setup](ON_DEMAND_INFERENCE_SETUP.md). It adds a separate host router and keeps the existing native engine settings. Operations exposes route keep-alive durations after the router configuration is installed.

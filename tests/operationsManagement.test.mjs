@@ -134,3 +134,10 @@ test('pending Strata residency blocks service mutations too', () => {
   h.run("serviceStates = {strata:{state:'running'}}; controlSampledAt = Date.now(); pendingControls.set('strata:model',{id:'load-job'});");
   assert.equal(h.run("controlState('service','strata')"), 'pending');
 });
+
+test('active routed inference disables service mutations', () => {
+  const h = harness();
+  h.run("inferenceBusy = true; serviceStates = {maya:{state:'running'}}; controlSampledAt=Date.now();");
+  assert.equal(h.run("controlState('service','maya')"), 'pending');
+  assert.equal(h.run("canControl('stop', controlState('service','maya'))"), false);
+});

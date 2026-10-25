@@ -23,6 +23,12 @@ def benchmark(management, specification):
 
 
 def perform(folder, management, specification):
+    from services.operations.inference_lifecycle import runtime_lease
+    with runtime_lease(management):
+        return perform_leased(folder, management, specification)
+
+
+def perform_leased(folder, management, specification):
     record = json.loads((folder / "job.json").read_text())
     management.audit_actor = record.get("audit", {})
     management.audit_job_id = record.get("id", folder.name)

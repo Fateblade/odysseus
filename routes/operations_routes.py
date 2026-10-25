@@ -63,6 +63,14 @@ def setup_operations_routes(service=None):
     async def get_management(request: Request):
         return await invoke(request, "management")
 
+    @router.get("/inference-router")
+    async def get_inference_router(request: Request):
+        return await invoke(request, "inference_router_config")
+
+    @router.post("/inference-router")
+    async def update_inference_router(request: Request):
+        return await invoke(request, "inference_router_update")
+
     @router.get("/residency")
     async def get_residency(request: Request):
         return await invoke(request, "residency")

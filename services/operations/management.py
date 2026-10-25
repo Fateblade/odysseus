@@ -101,11 +101,12 @@ class Management:
         return result
 
     def control_states(self):
+        from services.operations.inference_lifecycle import runtime_busy
         names = self.settings.get("services", {})
         with ThreadPoolExecutor(max_workers=4) as executor:
             states = {name: executor.submit(self.service_state, name) for name in names}
             containers = executor.submit(self.container_states)
-            return {"service_states": {name: future.result() for name, future in states.items()},
+            return {"inference_busy": runtime_busy(self), "service_states": {name: future.result() for name, future in states.items()},
                     "container_states": containers.result()}
 
     def residency(self):
@@ -149,6 +150,13 @@ class Management:
         return result
 
     def execute(self, payload):
+        if payload.get("operation") in ("logs", "status", "show"):
+            return self._execute(payload)
+        from services.operations.inference_lifecycle import runtime_lease
+        with runtime_lease(self):
+            return self._execute(payload)
+
+    def _execute(self, payload):
         target, operation = payload.get("target"), payload.get("operation")
         if target == "docker":
             name = payload.get("name")

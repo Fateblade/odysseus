@@ -14,6 +14,7 @@ const sections = {
     ['shared', 'Shared engines', '#operations-shared-engines'],
     ['strata', 'Strata residency', '.operations-strata-residency'], ['ollama', 'Ollama residency', '.operations-ollama-residency'],
     ['configuration', 'Strata configuration', '.operations-strata-configuration'], ['models', 'Ollama models', '.operations-ollama-control'],
+    ['on-demand', 'On-demand inference', '.operations-routing-retention'],
     ['output', 'Logs & details', '.operations-command-output'],
   ],
   jobs: [['benchmark', 'TPS benchmark', '.operations-benchmark'], ['scoreboard', 'Model scoreboard', '.operations-scoreboard'], ['scripts', 'Python scripts', '.operations-scripts'],

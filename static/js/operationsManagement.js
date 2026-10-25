@@ -1,3 +1,4 @@
+import { initializeInferenceRouting, refreshInferenceRouting } from './operationsInferenceRouting.js?v=20261026router1';
 import { initializeMayaGlm, renderMayaGlm, refreshMayaGlm, selectedGlmModel } from './operationsMayaGlm.js?v=20261025controls1';
 import { initializeBenchmark, setBenchmarkCatalog, refreshBenchmarkLimits } from './operationsBenchmark.js?v=20261025notifications1';
 import { initializeScoreboard, refreshScoreboard } from './operationsScoreboard.js?v=20261025notifications1';
@@ -26,6 +27,7 @@ let serviceStates = {};
 let containerStates = {};
 let controlSampledAt = 0;
 let strataResidency = {};
+let inferenceBusy = false;
 const pendingControls = new Map();
 
 function strataModelState(value) {
@@ -39,6 +41,7 @@ function canControl(operation, state) {
 }
 
 function controlState(target, name) {
+  if (inferenceBusy && target === 'service') return 'pending';
   if (pendingControls.has(`${target}:${name}`) || target === 'service' && name === 'strata' && pendingControls.has('strata:model')) return 'pending';
   if (!controlSampledAt || Date.now() - controlSampledAt > 15000) return 'unknown';
   return (target === 'service' ? serviceStates : containerStates)[name]?.state || 'unknown';
@@ -66,7 +69,7 @@ function updateResourceControls() {
   for (const operation of ['load', 'unload']) {
     const control = el(`operations-strata-${operation}`);
     if (!control) continue;
-    const state = pendingControls.has('strata:model') || pendingControls.has('service:strata') ? 'pending' :
+    const state = inferenceBusy || pendingControls.has('strata:model') || pendingControls.has('service:strata') ? 'pending' :
       controlSampledAt && Date.now() - controlSampledAt <= 15000 ? strataModelState(strataResidency) : 'unknown';
     control.disabled = !canControl(operation, state);
     control.title = control.disabled ? `Cannot ${operation}: model ${state}.` : '';
@@ -74,6 +77,7 @@ function updateResourceControls() {
 }
 
 function sampleControls(data, started) {
+  inferenceBusy = data.inference_busy === true;
   strataResidency = data.strata || {};
   serviceStates = data.service_states || {};
   containerStates = data.container_states || {};
@@ -589,6 +593,7 @@ function initialize() {
     columns.append(residency, settings); card.append(columns);
   }
   shared.append(sharedGrid);
+  content.insertBefore(initializeInferenceRouting(content, { section, field, button, node, task, request, status }), outputSection);
 
   const jobs = el('operations-jobs-panel');
   const message = node('p', '', 'operations-status');
@@ -686,6 +691,7 @@ async function refreshManagement() {
   const mayaDraft = mayaState && (Number(el('operations-maya-context').value) !== (mayaState.configured_context ?? mayaState.active_context) || el('operations-maya-drafting').checked !== Boolean(mayaState.drafting));
   if (!mayaState || (!mayaDraft && !mayaReview)) await loadMaya();
   await refreshMayaGlm();
+  await refreshInferenceRouting();
   await refreshResidency();
 }
 

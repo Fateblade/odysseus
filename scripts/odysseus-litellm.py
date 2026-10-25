@@ -50,6 +50,9 @@ def main():
 
 
 def dispatch_request(args, management, payload):
+    if payload.get("action") in ("inference_router_config", "inference_router_update"):
+        from services.operations.inference_settings import snapshot, update
+        return snapshot(management) if payload["action"] == "inference_router_config" else update(management, payload)
     if payload.get("action") in ("audit", "audit_detail"):
         from services.operations.audit import directory, read
         event_id = payload.get("id") if payload["action"] == "audit_detail" else None

@@ -279,3 +279,8 @@ body.operations-page { --operations-muted: color-mix(in srgb, var(--fg) 68%, var
   .operations-engine-columns { grid-template-columns: minmax(0, 1fr); }
   .operations-engine-pane + .operations-engine-pane { padding-left: 0; padding-top: 24px; border-left: 0; border-top: 1px solid var(--border); }
 }
+
+.operations-routing-retention { grid-column: 1 / -1; }
+.operations-retention-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 240px), 1fr)); gap: 24px; margin: 20px 0; }
+.operations-retention-grid article { min-width: 0; }
+.operations-retention-grid .operations-field { max-width: 320px; }

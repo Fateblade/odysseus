@@ -1,0 +1,14 @@
+[Unit]
+Description=Odysseus on-demand local inference router
+After=network.target
+
+[Service]
+Type=simple
+WorkingDirectory=/mnt/odysseus-fateblade
+ExecStart=%h/.local/share/odysseus-operations/venv/bin/python /mnt/odysseus-fateblade/scripts/odysseus-inference-router.py --config %h/.config/odysseus-operations/inference-router.json
+Restart=on-failure
+RestartSec=5
+TimeoutStopSec=3700
+
+[Install]
+WantedBy=default.target
