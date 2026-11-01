@@ -46,6 +46,7 @@ Use your existing helper venv path if it differs. Retain its other dependencies.
 ## 3. Create the route configuration
 
 ```bash
+cd /mnt/odysseus-fateblade
 install -d -m 700 "$HOME/.config/odysseus-operations"
 ROUTER_CONFIG="$HOME/.config/odysseus-operations/inference-router.json"
 test ! -e "$ROUTER_CONFIG" && install -m 600 scripts/inference-router.example.json "$ROUTER_CONFIG"
@@ -119,7 +120,9 @@ The proxy forwards native response bytes and backend HTTP errors without transla
 
 Open **Management → On-demand inference**. Set each route's keep-alive in seconds and choose **Save keep-alive**. The router reads changes within a few seconds; no model/server restart is needed. Reload settings discards the local draft. The previous configuration is retained in `inference-router.json.before-keep-alive`.
 
-Changes to aliases, native models, endpoints or service configuration still require editing their host-owned configuration and restarting the router while idle. If an idle timer expires, the next request loads the model again. Calling another model before expiry also switches immediately once preceding work finishes.
+After initial installation, expand **Edit routes and backend endpoints** in the same Operations section. Edit its JSON to add/remove aliases, change native models or update local backend endpoints, then choose **Save router configuration**. Validation and a revision check protect against invalid or stale edits. The running router applies identity/endpoint changes once its request queue is idle, releasing models at old endpoints before adopting the new configuration. Keep-alive-only changes do not release models. If both editors have drafts, use Reload settings before switching editors.
+
+Pull this update and restart `odysseus-inference-router.service` once to enable live route editing in an existing installation. Service-unit settings, the router listening port and management-file path remain host deployment settings; changing those still requires host configuration and a service restart. If an idle timer expires, the next request loads the model again. Calling another model before expiry also switches immediately once preceding work finishes.
 
 Ollama's native API supports explicit retention; the router pins its selected model during ownership and reapplies that pin after a routed response, then unloads it on its own timer. See the [Ollama residency documentation](https://github.com/ollama/ollama/blob/main/docs/faq.mdx). HTTP streaming uses explicit upstream cleanup as described in [HTTPX's async documentation](https://www.python-httpx.org/async/).
 

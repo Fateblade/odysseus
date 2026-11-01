@@ -39,3 +39,20 @@ def test_invalid_duration_does_not_modify_file(tmp_path, ttl):
     with pytest.raises(OperationsError):
         update(host, {"revision": snapshot(host)["revision"], "keep_alive_seconds": {"ds": ttl}})
     assert path.read_bytes() == original
+
+
+def test_route_editor_preserves_host_settings_and_validates_endpoints(tmp_path):
+    path = tmp_path / "inference-router.json"
+    original = {"port": 8094, "management_config": "private-path", "unknown": "preserve", "backends": {"maya": "http://127.0.0.1:8092"}, "routes": {"ds": {"backend": "maya", "model": "ds"}}}
+    path.write_text(json.dumps(original))
+    host = SimpleNamespace(path=tmp_path / "management.json", settings={"services": {"maya": "maya.service"}})
+    configuration = {"backends": original["backends"], "routes": {"new-alias": {"backend": "maya", "model": "new-model", "keep_alive_seconds": 120}}}
+    result = update(host, {"revision": snapshot(host)["revision"], "configuration": configuration})
+    saved = json.loads(path.read_text())
+    assert saved["unknown"] == "preserve" and saved["port"] == 8094 and saved["management_config"] == "private-path"
+    assert result["configuration"] == configuration
+    before = path.read_bytes()
+    configuration["backends"]["maya"] = "http://example.com:8092"
+    with pytest.raises(OperationsError, match="loopback"):
+        update(host, {"revision": result["revision"], "configuration": configuration})
+    assert path.read_bytes() == before

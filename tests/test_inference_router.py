@@ -17,7 +17,7 @@ class Engines:
     def prepare(self, backend, model):
         self.calls.append(("prepare", backend, model))
 
-    def release(self, backend, model):
+    def release(self, backend, model=None):
         self.calls.append(("release", backend, model))
 
 
@@ -273,3 +273,17 @@ async def test_live_retention_reload_changes_expiry_without_restart(tmp_path):
         await asyncio.sleep(1.1)
     assert c.resident is None
     assert engines.calls[-1] == ("release", "maya", "deepseek-v4.1-flash")
+
+
+@pytest.mark.asyncio
+async def test_route_changes_wait_for_idle_and_retire_old_endpoints(tmp_path):
+    c, engines, now = fixture(tmp_path)
+    value = {"backends": {"maya": c.management.maya_url, "maya_glm": c.management.maya_glm_url},
+             "routes": {"new": {"backend": "maya", "model": "new-native", "keep_alive_seconds": 120}}}
+    async with c.lease("ds", "active"):
+        await c.reconfigure(value)
+        assert "ds" in c.routes and len(engines.calls) == 1
+    await c.reconfigure(value)
+    assert set(c.routes) == {"new"} and c.resident is None
+    assert ("release", "maya", None) in engines.calls
+    assert ("release", "maya_glm", None) in engines.calls

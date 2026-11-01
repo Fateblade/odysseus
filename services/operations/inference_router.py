@@ -50,6 +50,28 @@ def validate_routes(value, management):
     return result
 
 
+def validate_configuration(value, management):
+    from copy import copy
+    urls = value.get("backends")
+    if not isinstance(urls, dict) or not urls or set(urls) - BACKENDS:
+        raise ValueError("Configure only the supported native backends.")
+    updated = copy(management)
+    port = value.get("port", 8094)
+    occupied = set()
+    for backend in BACKENDS:
+        url = urls.get(backend, "")
+        if url:
+            parsed = urlsplit(url)
+            if parsed.scheme != "http" or parsed.hostname not in ("localhost", "127.0.0.1", "::1") or parsed.username or parsed.password or parsed.query or parsed.fragment or parsed.path not in ("", "/") or parsed.port == port:
+                raise ValueError("Backend endpoints must be loopback HTTP origins on a different port from the router.")
+            native_port = parsed.port or 80
+            if native_port in occupied:
+                raise ValueError("Each native backend must use a separate local port.")
+            occupied.add(native_port)
+        setattr(updated, backend + "_url", url)
+    return updated, validate_routes(value.get("routes"), updated)
+
+
 async def finish_thread(function, *args):
     task = asyncio.create_task(asyncio.to_thread(function, *args))
     try:
@@ -145,6 +167,34 @@ class Coordinator:
                         self.log("routing.request_finished", route, request_id=request_id)
         finally:
             self.lock.release()
+
+    async def reconfigure(self, value):
+        management, routes = validate_configuration(value, self.management)
+        same_identity = set(routes) == set(self.routes) and all(
+            all(route[key] == self.routes[name][key] for key in ("backend", "model", "url")) for name, route in routes.items())
+        same_endpoints = all(getattr(management, name + "_url", "") == getattr(self.management, name + "_url", "") for name in BACKENDS)
+        if same_identity and same_endpoints:
+            for name in routes:
+                self.routes[name]["keep_alive_seconds"] = routes[name]["keep_alive_seconds"]
+            return
+        if self.uncertain:
+            raise OperationsError("Resolve the unconfirmed previous request before changing routes.", 409)
+        if self.lock.locked() or self.queued:
+            return
+        async with self.lock:
+            with runtime_lease(self.management):
+                self.persist(active=True)
+                # Retire old endpoints before forgetting how to release their resident models.
+                for backend in BACKENDS:
+                    if getattr(self.management, backend + "_url", ""):
+                        await finish_thread(self.engines.release, backend)
+                self.management = management
+                self.engines = NativeEngines(management)
+                self.routes = routes
+                self.resident = None
+                self.last_finished = None
+                self.last_error = None
+                self.persist()
 
     async def expire(self):
         if self.uncertain or self.lock.locked() or self.queued or self.resident is None or self.last_finished is None:
@@ -244,7 +294,7 @@ class LeasedResponse(StreamingResponse):
                     await self.lease.__aexit__(None, None, None)
 
 
-def create_app(coordinator, client_factory=None, reload_routes=None):
+def create_app(coordinator, client_factory=None, reload_routes=None, reload_configuration=None):
     key = os.environ.get("ODYSSEUS_INFERENCE_ROUTER_KEY", "")
 
     @asynccontextmanager
@@ -253,7 +303,9 @@ def create_app(coordinator, client_factory=None, reload_routes=None):
             while True:
                 await asyncio.sleep(1)
                 try:
-                    if reload_routes:
+                    if reload_configuration:
+                        await coordinator.reconfigure(await finish_thread(reload_configuration))
+                    elif reload_routes:
                         routes = validate_routes(await finish_thread(reload_routes), coordinator.management)
                         if set(routes) != set(coordinator.routes) or any(routes[name]["backend"] != old["backend"] or routes[name]["model"] != old["model"] for name, old in coordinator.routes.items()):
                             raise ValueError("Restart the router after changing route identities.")
@@ -261,7 +313,7 @@ def create_app(coordinator, client_factory=None, reload_routes=None):
                             coordinator.routes[name]["keep_alive_seconds"] = routes[name]["keep_alive_seconds"]
                     await coordinator.expire()
                 except Exception as error:
-                    coordinator.last_error = type(error).__name__
+                    coordinator.last_error = str(error)
         worker = asyncio.create_task(reaper())
         try:
             yield

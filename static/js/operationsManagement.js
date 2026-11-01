@@ -1,4 +1,4 @@
-import { initializeInferenceRouting, refreshInferenceRouting } from './operationsInferenceRouting.js?v=20261026router1';
+import { initializeInferenceRouting, refreshInferenceRouting } from './operationsInferenceRouting.js?v=20261101editor1';
 import { initializeMayaGlm, renderMayaGlm, refreshMayaGlm, selectedGlmModel } from './operationsMayaGlm.js?v=20261025controls1';
 import { initializeBenchmark, setBenchmarkCatalog, refreshBenchmarkLimits } from './operationsBenchmark.js?v=20261025notifications1';
 import { initializeScoreboard, refreshScoreboard } from './operationsScoreboard.js?v=20261025notifications1';

@@ -4,11 +4,16 @@ let dirty = false;
 let fields;
 let note;
 let save;
+let editor;
+let saveConfiguration;
 const durations = new Map();
 
 function render(result) {
   snapshot = result;
   dirty = false;
+  editor.value = JSON.stringify(result.configuration || { backends: {}, routes: {} }, null, 2);
+  editor.disabled = !result.installed;
+  saveConfiguration.disabled = !result.installed;
   durations.clear();
   fields.replaceChildren();
   note.textContent = result.installed ? 'Durations are seconds after the last request finishes. Zero unloads immediately. Changes take effect within a few seconds.' : result.message;
@@ -17,7 +22,7 @@ function render(result) {
     row.append(tools.node('h3', route.name), tools.node('p', `${route.backend} / ${route.model}`, 'operations-muted'));
     const input = tools.field(row, `operations-retention-${durations.size}`, 'Keep-alive (seconds, 0 or greater)', route.keep_alive_seconds, null, 'number');
     input.min = '0'; input.step = '1';
-    input.addEventListener('input', () => { dirty = true; });
+    input.addEventListener('input', () => { dirty = true; saveConfiguration.disabled = true; });
     durations.set(route.name, input);
     fields.append(row);
   }
@@ -52,6 +57,21 @@ export function initializeInferenceRouting(parent, dependencies) {
   save.disabled = true;
   const actions = tools.node('div', '', 'cookbook-actions');
   actions.append(save, tools.button('Reload settings', () => tools.task(() => refreshInferenceRouting(true))));
-  card.append(note, fields, actions);
+  const advanced = tools.node('details');
+  advanced.append(tools.node('summary', 'Edit routes and backend endpoints'));
+  advanced.append(tools.node('p', 'Add or remove routes and change native model names or local endpoints. Identity changes apply when the request queue is idle and release models at the old endpoints first. Keep competing installed engines in backends.', 'operations-muted'));
+  editor = tools.field(advanced, 'operations-routing-configuration', 'Router configuration (JSON)', '', null, 'textarea');
+  editor.rows = 20; editor.spellcheck = false;
+  editor.addEventListener('input', () => { dirty = true; save.disabled = true; });
+  saveConfiguration = tools.button('Save router configuration', () => tools.task(async () => {
+    let configuration;
+    try { configuration = JSON.parse(editor.value); }
+    catch { throw new Error('Router configuration must be valid JSON.'); }
+    render(await tools.request('inference-router', { revision: snapshot.revision, configuration }));
+    tools.status('Router configuration saved. Route changes apply once the request queue is idle; inspect router status if they remain pending.');
+  }));
+  saveConfiguration.disabled = true;
+  advanced.append(saveConfiguration);
+  card.append(note, fields, actions, advanced);
   return card;
 }

@@ -1,4 +1,4 @@
-"""Reviewed host-owned router configuration; the UI edits retention only."""
+"""Reviewed host-owned router configuration; route and retention edits."""
 
 import hashlib
 import json
@@ -38,6 +38,7 @@ def snapshot(management):
         return {"configured": True, "installed": False, "routes": [], "message": "Install the on-demand inference router to configure model keep-alive here."}
     raw, value = read(path)
     return {"configured": True, "installed": True, "revision": hashlib.sha256(raw).hexdigest(),
+            "configuration": {"backends": value.get("backends", {}), "routes": value["routes"]},
             "routes": [{"name": alias, "backend": route.get("backend"), "model": route.get("model"),
                         "keep_alive_seconds": route.get("keep_alive_seconds", 600)} for alias, route in value["routes"].items()]}
 
@@ -50,13 +51,25 @@ def update(management, payload):
         raw, value = read(path)
         if payload.get("revision") != hashlib.sha256(raw).hexdigest():
             raise OperationsError("Router settings changed. Reload before saving.", 409)
-        changes = payload.get("keep_alive_seconds")
-        if not isinstance(changes, dict) or set(changes) != set(value["routes"]):
-            raise OperationsError("Supply a keep-alive duration for each configured route.")
-        for alias, ttl in changes.items():
-            if type(ttl) not in (int, float) or not math.isfinite(ttl) or ttl < 0:
-                raise OperationsError("Keep-alive must be a finite number of seconds, zero or greater.")
-            value["routes"][alias]["keep_alive_seconds"] = ttl
+        configuration = payload.get("configuration")
+        if configuration is not None:
+            if not isinstance(configuration, dict) or set(configuration) != {"backends", "routes"}:
+                raise OperationsError("Edit the backends and routes objects only.")
+            from services.operations.inference_router import validate_configuration
+            candidate = {**value, **configuration}
+            try:
+                validate_configuration(candidate, management)
+            except (ValueError, TypeError, AttributeError) as error:
+                raise OperationsError(str(error)) from None
+            value = candidate
+        else:
+            changes = payload.get("keep_alive_seconds")
+            if not isinstance(changes, dict) or set(changes) != set(value["routes"]):
+                raise OperationsError("Supply a keep-alive duration for each configured route.")
+            for alias, ttl in changes.items():
+                if type(ttl) not in (int, float) or not math.isfinite(ttl) or ttl < 0:
+                    raise OperationsError("Keep-alive must be a finite number of seconds, zero or greater.")
+                value["routes"][alias]["keep_alive_seconds"] = ttl
         backup = path.with_name(path.name + ".before-keep-alive")
         write_json(backup, json.loads(raw))
         write_json(path, value)
