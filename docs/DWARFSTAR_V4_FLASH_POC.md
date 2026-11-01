@@ -452,3 +452,6 @@ Local verification covers discovery, malformed/unavailable/disabled endpoints, h
 ## Optional inference request journal
 
 See [Inference request journal installation](INFERENCE_REQUEST_JOURNAL.md) to capture caller/model metadata, full prompts and responses, management jobs and independently observed residency changes. The gateway extension and observer need a one-time host setup after pulling and rebuilding Odysseus.
+
+
+See the [2026-11-01 engine upgrade review and isolated trials](ENGINE_UPGRADE_TRIALS.md) before changing source versions or performance defaults. Existing production pins remain unchanged.

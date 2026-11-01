@@ -208,6 +208,10 @@ def snapshot(management, specification):
     backend = specification["backend"]
     try:
         if backend == "ollama":
+            try:
+                environment["engine_version"] = overview.get_json(management.ollama_url.rstrip("/") + "/api/version").get("version")
+            except Exception:
+                pass
             data = overview.ollama(management.ollama_url)
             matches = [row for row in data.get("loaded", []) if row["name"] == specification["model"]]
             installed = [row for row in data.get("installed", []) if row["name"] == specification["model"]]

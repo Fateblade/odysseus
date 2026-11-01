@@ -116,3 +116,14 @@ def test_snapshot_uses_live_context_and_labels_declared_size(monkeypatch):
     assert result["model_size_source"] == "user supplied artifact size"
     assert result["memory_after_sample"]["available_bytes"] == 10
     assert calls == ["http://native"]
+
+
+def test_ollama_snapshot_records_server_version_without_loading(monkeypatch):
+    from services.operations import overview
+    calls = []
+    monkeypatch.setattr(overview, "get_json", lambda url: calls.append(url) or {"version": "test-server-version"})
+    monkeypatch.setattr(overview, "ollama", lambda url: {"loaded": [], "installed": []})
+    monkeypatch.setattr(overview, "memory", lambda: {})
+    result = benchmark.snapshot(SimpleNamespace(ollama_url="http://native"), {"backend": "ollama", "model": "test"})
+    assert result["engine_version"] == "test-server-version"
+    assert calls == ["http://native/api/version"]

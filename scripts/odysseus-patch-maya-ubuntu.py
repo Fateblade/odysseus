@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Adapt pinned Maya v1.1.22 Ubuntu detection and explicitly optimize HIP Release builds."""
+"""Adapt reviewed Maya Ubuntu detection and explicitly optimize HIP Release builds."""
 
 import argparse
 import hashlib
@@ -8,6 +8,7 @@ from pathlib import Path
 
 
 SOURCE_SHA256 = "76a2538acd0b810ee7b159b3a25c801ef869997118f3d038e1f71ec81e3ade4d"
+CANDIDATE_SHA256 = "81d0e3b285f3680c962993c8dc83a172205b673afbaa94f96d9bd3021517dd43"
 REPLACEMENTS = (
     ('root / "lib64" / "rocm" / "llvm" / "bin" / exe, root / "bin" / exe)',
      'root / "lib64" / "rocm" / "llvm" / "bin" / exe, root / "lib" / "llvm-21" / "bin" / exe, root / "bin" / exe)'),
@@ -31,8 +32,8 @@ def patch_source(raw):
             patched = patched.replace(old, new)
         else:
             raise ValueError("Unexpected Maya detection code; refusing to patch.")
-    if hashlib.sha256(original.encode()).hexdigest() != SOURCE_SHA256:
-        raise ValueError("maya.py does not match pinned v1.1.22 source; preserve edits and inspect it first.")
+    if hashlib.sha256(original.encode()).hexdigest() not in (SOURCE_SHA256, CANDIDATE_SHA256):
+        raise ValueError("maya.py does not match pinned reviewed v1.1.22 or v1.1.48 source; preserve edits and inspect it first.")
     return patched.encode()
 
 
@@ -57,7 +58,10 @@ def main():
     backup = path.with_name("maya.py.before-ubuntu-layout")
     if backup.exists():
         saved = backup.read_bytes().replace(b"\r\n", b"\n")
-        if backup.is_symlink() or hashlib.sha256(saved).hexdigest() != SOURCE_SHA256:
+        original = patched.decode()
+        for old, new in REPLACEMENTS:
+            original = original.replace(new, old)
+        if backup.is_symlink() or saved != original.encode():
             parser.error("Existing backup differs from pinned original; preserve and inspect it first.")
     else:
         with backup.open("xb") as file:

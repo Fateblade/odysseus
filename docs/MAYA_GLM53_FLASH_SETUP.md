@@ -288,3 +288,6 @@ Strata Load model is enabled only after a fresh unloaded reading; Unload model r
 
 
 For automatic loading, coordinated model switching and per-route idle retention, use the [on-demand inference setup](ON_DEMAND_INFERENCE_SETUP.md). It adds a separate host router and keeps the existing native engine settings. Operations exposes route keep-alive durations after the router configuration is installed.
+
+
+See the [2026-11-01 engine upgrade review and isolated trials](ENGINE_UPGRADE_TRIALS.md) before changing source versions or performance defaults. Existing production pins remain unchanged.
