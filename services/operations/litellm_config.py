@@ -5,6 +5,7 @@ import difflib
 import hashlib
 import io
 import json
+import re
 from urllib.parse import urlsplit
 
 from ruamel.yaml import YAML
@@ -94,6 +95,8 @@ def view(config):
             "api_base": public_url(params.get("api_base")),
             "additional_drop_params": drop_parameters(params.get("additional_drop_params")),
             "credentials_configured": bool(params.get("api_key")) and params.get("api_key") != "not-needed",
+            "credential_reference": params.get("api_key", "") if isinstance(params.get("api_key"), str) and params["api_key"].startswith("os.environ/") else "",
+            "model_info": metadata_view(row.get("model_info") or {}),
         })
     router = config.get("router_settings", {})
     aliases = router.get("model_group_alias", {})
@@ -110,13 +113,27 @@ def view(config):
             "fallbacks": copy.deepcopy(fallbacks)}
 
 
+def metadata_view(info):
+    from services.operations.model_metadata import FIELDS
+    result = {}
+    for field in FIELDS:
+        value = info.get(field)
+        if type(value) in (int, bool) or (field == "mode" and value in ("chat", "embedding", "completion")):
+            result[field] = value
+    marker = info.get("odysseus")
+    if isinstance(marker, dict):
+        result["odysseus"] = {key: marker[key] for key in ("schema_version", "deployment_id", "context_window", "guidance_only", "unknown_fields", "effective", "aliases", "evidence") if key in marker}
+    return result
+
+
 def snapshot(raw):
     return {"configured": True, "revision": revision(raw), "draft": view(load_config(raw)),
             "strategies": list(STRATEGIES)}
 
 
-def candidate(raw, draft):
+def candidate(raw, draft, metadata_state=None):
     config = load_config(raw)
+    original_config = copy.deepcopy(config)
     original_view = view(config)
     if not isinstance(draft, dict) or not isinstance(draft.get("models"), list):
         raise OperationsError("A model draft is required.")
@@ -165,6 +182,11 @@ def candidate(raw, draft):
                 raise OperationsError("New local deployments require an endpoint URL.")
             if model.startswith("openai/"):
                 params["api_key"] = "not-needed"
+        reference = requested.get("credential_reference")
+        if reference:
+            if not isinstance(reference, str) or not re.fullmatch(r"os\.environ/[A-Za-z_][A-Za-z0-9_]{0,127}", reference):
+                raise OperationsError("Credentials must reference an environment variable: os.environ/NAME.")
+            params["api_key"] = reference
         new_rows.append(row)
     config["model_list"] = new_rows
     names = {row["model_name"] for row in new_rows}
@@ -224,8 +246,11 @@ def candidate(raw, draft):
             router[key] = value
     if router:
         config["router_settings"] = router
+    if metadata_state is not None:
+        from services.operations.model_metadata import prepare
+        prepare(config, draft, metadata_state)
     # An unchanged draft must not rewrite formatting or comments.
-    if view(config) == original_view:
+    if config == original_config:
         return raw, config
     stream = io.StringIO()
     yaml_codec().dump(config, stream)
@@ -235,8 +260,8 @@ def candidate(raw, draft):
     return result, config
 
 
-def review(raw, draft):
-    edited, config = candidate(raw, draft)
+def review(raw, draft, metadata_state=None):
+    edited, config = candidate(raw, draft, metadata_state=metadata_state)
     before = json.dumps(view(load_config(raw)), indent=2, ensure_ascii=False).splitlines()
     after = json.dumps(view(config), indent=2, ensure_ascii=False).splitlines()
     diff = "\n".join(difflib.unified_diff(before, after, fromfile="current", tofile="proposed", lineterm=""))

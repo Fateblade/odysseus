@@ -152,11 +152,13 @@ def probe(raw, draft, index, container):
     return {"ok": True, "message": "Endpoint reachable; backend model is advertised. No generation was started."}
 
 
-def apply(path, raw, payload, container, base_url):
-    edited, config = candidate(raw, payload.get("draft"))
+def apply(path, raw, payload, container, base_url, metadata_state=None, persist=None):
+    edited, config = candidate(raw, payload.get("draft"), metadata_state=metadata_state)
     if payload.get("review_digest") != revision(edited):
         raise OperationsError("Review these exact changes before applying them.", 409)
     if edited == raw:
+        if persist:
+            persist()
         return {"ok": True, "changed": False, **snapshot(raw)}
     backup_dir = path.parent / ".odysseus-backups"
     backup_dir.mkdir(mode=0o700, exist_ok=True)
@@ -170,6 +172,10 @@ def apply(path, raw, payload, container, base_url):
         write_config(path, edited)
         docker_command(container, "restart", "--time", "30")
         await_gateway(base_url, config, container)
+        if metadata_state is not None:
+            verify_metadata(base_url, config, container)
+        if persist:
+            persist()
     except Exception:
         try:
             current = path.read_bytes()
@@ -182,6 +188,25 @@ def apply(path, raw, payload, container, base_url):
             raise OperationsError("Apply failed and automatic recovery could not be verified. Restore the host backup and inspect LiteLLM.", 502) from None
         raise OperationsError("Apply failed. The previous configuration was restored and LiteLLM recovery was verified.", 502) from None
     return {"ok": True, "changed": True, "backup": backup.name, **snapshot(edited)}
+
+
+def verify_metadata(base_url, config, container):
+    key = resolve_secret(config.get("general_settings", {}).get("master_key", ""), container)
+    response = get_json(base_url.rstrip("/") + "/model/info", key)
+    actual = response.get("data", [])
+    from services.operations.model_metadata import FIELDS
+    for row in config["model_list"]:
+        expected = row.get("model_info", {})
+        marker = expected.get("odysseus")
+        if not marker:
+            continue
+        matches = [item.get("model_info", {}) for item in actual
+                   if item.get("model_name") == row["model_name"] and
+                   (item.get("model_info", {}).get("odysseus") or {}).get("deployment_id") == marker["deployment_id"]]
+        if len(matches) != 1 or json.dumps(matches[0].get("odysseus"), sort_keys=True) != json.dumps(marker, sort_keys=True) or any(
+                expected.get(field) != matches[0].get(field) or type(expected[field]) is not type(matches[0].get(field))
+                for field in FIELDS if field != "context_window" and expected.get(field) is not None):
+            raise OperationsError("LiteLLM did not expose the reviewed metadata through /model/info.", 502)
 
 
 def execute(path, container, base_url, payload):

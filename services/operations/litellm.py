@@ -36,7 +36,7 @@ class HostOperations:
                 if action in ("management", "residency", "jobs", "strata_config", "dwarfstar_config", "maya_config", "maya_glm_config", "audit"):
                     return {"configured": False, "message": "Connect the Linux host helper to enable management and jobs."}
                 raise OperationsError("Linux host access is not configured.", 503)
-        if not self.config_path and action in ("snapshot", "preview", "probe", "apply"):
+        if not self.config_path and action in ("snapshot", "preview", "probe", "apply", "metadata_refresh"):
             if action == "snapshot":
                 return {"configured": False, "message": "Host access is not configured. Connect the Operations host helper to read the host and manage LiteLLM."}
             raise OperationsError("LiteLLM host access is not configured.", 503)

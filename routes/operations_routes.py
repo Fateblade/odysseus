@@ -171,6 +171,10 @@ def setup_operations_routes(service=None):
     async def preview_configuration(request: Request):
         return await invoke(request, "preview")
 
+    @router.post("/litellm/metadata/refresh")
+    async def refresh_model_metadata(request: Request):
+        return await invoke(request, "metadata_refresh")
+
     @router.post("/litellm/probe")
     async def probe_deployment(request: Request):
         return await invoke(request, "probe")

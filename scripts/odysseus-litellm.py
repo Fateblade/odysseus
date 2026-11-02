@@ -50,6 +50,12 @@ def main():
 
 
 def dispatch_request(args, management, payload):
+    if payload.get("action") in ("inference_router_update", "strata_apply", "dwarfstar_apply", "maya_apply", "maya_glm_apply", "manage", "job_start"):
+        from services.operations.model_metadata_store import invalidate
+        invalidate(args.config)
+    if payload.get("action") in ("snapshot", "preview", "probe", "apply", "metadata_refresh"):
+        from services.operations.model_metadata_store import execute as execute_metadata
+        return execute_metadata(args.config, args.container, args.base_url, payload, management)
     if payload.get("action") in ("inference_router_config", "inference_router_update"):
         from services.operations.inference_settings import snapshot, update
         return snapshot(management) if payload["action"] == "inference_router_config" else update(management, payload)

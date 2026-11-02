@@ -5,6 +5,7 @@ import { closeOverview, openOverview } from './operationsOverview.js?v=20261102s
 import { openManagement, closeManagement } from './operationsManagement.js?v=20261102stratads1';
 import { showSections, panelForSectionHash } from './operationsNavigation.js?v=20261102stratads1';
 import { openAudit } from './operationsAudit.js?v=20261025notifications1';
+import { metadataPanel } from './operationsModelMetadata.js?v=20261102metadata1';
 
 const endpoint = '/api/operations/litellm';
 let state = null;
@@ -144,9 +145,11 @@ function renderModels() {
     fields.className = 'operations-grid';
     fields.append(
       field('Public model name', row.model_name, value => { row.model_name = value; }),
-      field('Backend model', row.model, value => { row.model = value; }),
-      field('Endpoint URL', row.api_base, value => { row.api_base = value; }),
+      field('Backend model', row.model, value => { row.model = value; resetIdentity(row); }),
+      field('Endpoint URL', row.api_base, value => { row.api_base = value; resetIdentity(row); }),
+      field('Credential reference (os.environ/NAME; blank retains existing)', row.credential_reference, value => { row.credential_reference = value; }),
     );
+    for (const input of [...fields.querySelectorAll('input')].slice(1, 3)) input.addEventListener('change', renderModels);
     const dropped = field('Parameters to drop (comma-separated)', (row.additional_drop_params || []).join(', '), value => {
       row.additional_drop_params = value.split(',').map(name => name.trim()).filter(Boolean);
     });
@@ -159,7 +162,7 @@ function renderModels() {
     actions.className = 'cookbook-actions';
     actions.append(
       button('Test endpoint', () => task(async () => {
-        const result = await request('/probe', { revision: state.revision, draft: state.draft, index });
+        const result = await request('/probe', { revision: state.revision, metadata_revision: state.metadata_revision, draft: state.draft, index });
         message(result.message);
       }, 'Checking backend model discovery…')),
       button('Remove', () => {
@@ -174,10 +177,30 @@ function renderModels() {
       note.textContent = 'Existing credentials retained';
       actions.append(note);
     }
-    card.append(legend, fields, actions);
+    card.append(legend, fields, actions, metadataPanel(row, state.metadata_sources || [], invalidate, renderModels, refreshMetadata));
     el('operations-models').append(card);
   });
   el('operations-count').textContent = `${state.draft.models.length} deployments`;
+}
+
+function resetIdentity(row) {
+  row.metadata = { overrides: {}, source_id: null, reset_identity: true };
+}
+
+function refreshMetadata() {
+  return task(async () => {
+    const refreshed = await request('/metadata/refresh', { revision: state.revision, metadata_revision: state.metadata_revision });
+    state.metadata_revision = refreshed.metadata_revision;
+    state.metadata_sources = refreshed.metadata_sources;
+    state.metadata_providers = refreshed.metadata_providers;
+    for (const row of state.draft.models) {
+      const source = state.metadata_sources.find(item => item.id === row.metadata?.source_id);
+      if (source) { row.metadata.detected = source.detected; row.metadata.source = source; }
+    }
+    invalidate();
+    renderModels();
+    message('Local discovery refreshed. Draft edits and overrides retained; nothing published.');
+  }, 'Reading configured local providers without loading models…');
 }
 
 function renderRouting() {
@@ -261,7 +284,7 @@ el('operations-refresh').addEventListener('click', () => {
   task(load, 'Loading LiteLLM configuration…');
 });
 el('operations-add-model').addEventListener('click', () => {
-  state.draft.models.push({ index: null, model_name: '', model: '', api_base: '', additional_drop_params: [] });
+  state.draft.models.push({ index: null, model_name: '', model: '', api_base: '', additional_drop_params: [], metadata: { overrides: {}, source_id: null } });
   invalidate();
   renderModels();
   el('operations-models').lastElementChild.querySelector('input').focus();
@@ -282,19 +305,19 @@ el('operations-strategy').addEventListener('change', event => {
   invalidate();
 });
 el('operations-preview').addEventListener('click', () => task(async () => {
-  reviewed = await request('/preview', { revision: state.revision, draft: state.draft });
-  el('operations-diff').textContent = reviewed.diff || 'No configuration changes.';
+  reviewed = await request('/preview', { revision: state.revision, metadata_revision: state.metadata_revision, draft: state.draft });
+  el('operations-diff').textContent = (reviewed.diff || 'No YAML changes.') + '\n\nPublic metadata guidance:\n' + JSON.stringify(reviewed.metadata_public, null, 2);
   el('operations-review').hidden = false;
   message(reviewed.changed ? 'Changes validated. Review the diff before restarting LiteLLM.' : 'No configuration changes.');
 }, 'Validating models and routing…'));
 el('operations-apply').addEventListener('click', () => task(async () => {
   const result = await request('/apply', {
-    revision: state.revision, draft: state.draft, review_digest: reviewed.review_digest,
+    revision: state.revision, metadata_revision: state.metadata_revision, draft: state.draft, review_digest: reviewed.review_digest,
   });
   state = result;
   invalidate();
   render();
-  message('Configuration applied. LiteLLM health and model catalog verified; previous configuration saved on the host.');
+  message('Configuration and metadata applied. LiteLLM health, catalog and published metadata verified.');
 }, 'Applying changes and restarting LiteLLM. This can take several minutes; keep this page open…'));
 
 const theme = getSaved();
