@@ -34,6 +34,19 @@ python3 /mnt/odysseus-fateblade/scripts/odysseus-build-strata-ds41f.py "$HOME/st
 
 The helper verifies source/dependency pins and effective HIP Release flags, builds the native engine plus three no-weight kernel tests, then runs version discovery and all tests. A successful run writes build-hip/odysseus-build-receipt.json with the binary hash. Configure success alone is insufficient. Do not download weights until this gate passes. Preserve exact build/kernel errors on failure.
 
+### IQ4_XS numerical failure on the ROCm7.1 host
+
+The first host run built engine 0.1.55 but failed `IQ4_XS wmma vs scalar y`: 8.56e-3 in the full suite and 1.04e-2 with `--type 23`, against the unchanged 3e-3 limit. Other default IQ checks and both TQ suites passed. This does not qualify the build or establish model correctness. Keep downloads paused.
+
+The final comparison uses independently computed intermediate activations. To distinguish accumulated gate/up differences from a down-projection kernel discrepancy, run this diagnostic with the other engines stopped:
+
+~~~bash
+set -o pipefail
+python3 /mnt/odysseus-fateblade/scripts/odysseus-diagnose-strata-ds41f.py "$HOME/strata-ds41f" 2>&1 | tee "$HOME/strata-ds41f-iq-diagnostic.log"
+~~~
+
+The helper checks the pinned revision and pristine test source, temporarily adds shared-activation comparisons, and runs both the full IQ suite and isolated IQ4_XS. It retains every original check and tolerance, restores the original source in a finally block, and rebuilds the original test binary. It does not rebuild the native engine, modify a receipt, or bypass qualification. A nonzero exit is expected while the original failure persists. Preserve the `DIAG` lines and original failures for analysis. If interrupted by a power loss or force-kill, inspect the test source before retrying; the helper refuses local changes.
+
 ## 2. Disk space and separate model installation
 
 The chosen IST-DAS-2.00bpw / IQ2_XXS files plus Engram, drafter and metadata total **256,816,878,701 bytes**. Extra space is needed for packing, builds, partial downloads, logs and rollback. Plan at least 300 GB free, then check the installer's requirement; this margin is not a measured upper bound. Retained Qwen/Maya/GLM files are additional. These weights are streamed from SSD, not all held in RAM.
