@@ -1,4 +1,5 @@
 import importlib.util
+import hashlib
 import subprocess
 from pathlib import Path
 
@@ -68,3 +69,31 @@ def test_keeps_original_gate_and_requires_forced_paths(diagnostic):
     assert "cross_taken < 1 || scalar_taken != 0" in patched
     with pytest.raises(ValueError, match="insertion point"):
         diagnostic.instrument(b"changed upstream test")
+
+
+def test_qualification_patch_is_guarded_idempotent_and_preserves_local_work(tmp_path, monkeypatch, diagnostic):
+    source = tmp_path / diagnostic.SOURCE
+    source.parent.mkdir(parents=True)
+    pristine = (diagnostic.ANCHOR + "\n").encode()
+    source.write_bytes(pristine)
+    monkeypatch.setattr(diagnostic, "SOURCE_SHA256", hashlib.sha256(pristine).hexdigest())
+    monkeypatch.setattr(diagnostic.subprocess, "check_output", lambda command: pristine)
+    diagnostic.apply_gate_patch(tmp_path)
+    patched = source.read_bytes()
+    assert b"pipeline residual" in patched
+    assert b"CPU propagated delta" in patched
+    assert b"scalar gate_up vs CPU" in patched
+    assert diagnostic.ANCHOR.encode() not in patched
+    assert b"pipeline difference" in patched
+    assert b"same WMMA h" in patched and b"same scalar h" in patched
+    diagnostic.apply_gate_patch(tmp_path)
+    assert source.read_bytes() == patched
+    source.write_bytes(patched + b"local work")
+    with pytest.raises(ValueError, match="unrelated local changes"):
+        diagnostic.apply_gate_patch(tmp_path)
+    assert source.read_bytes().endswith(b"local work")
+
+
+def test_gate_refuses_unreviewed_upstream_source(diagnostic):
+    with pytest.raises(ValueError, match="Unreviewed IQ test source"):
+        diagnostic.qualification_source(diagnostic.ANCHOR.encode())

@@ -23,6 +23,8 @@ def main():
     root = args.directory.expanduser().resolve()
     spec = importlib.util.spec_from_file_location("maya_build", Path(__file__).with_name("odysseus-build-maya-glm.py"))
     build = importlib.util.module_from_spec(spec); spec.loader.exec_module(build)
+    spec = importlib.util.spec_from_file_location("iq_gate", Path(__file__).with_name("odysseus-diagnose-strata-ds41f.py"))
+    iq_gate = importlib.util.module_from_spec(spec); spec.loader.exec_module(iq_gate)
     headers = Path.home() / "rocwmma-7.1.0/library/include"
     bitcode = Path("/usr/lib/llvm-21/lib/clang/21/amdgcn/bitcode")
     receipt = root / "build-hip/odysseus-build-receipt.json"
@@ -33,6 +35,7 @@ def main():
             if not file.is_file():
                 raise ValueError(f"Missing existing build prerequisite: {file}")
         receipt.unlink(missing_ok=True)
+        iq_gate.apply_gate_patch(root)
         command = [item.replace("-DSTRATA_BUILD_TESTS=OFF", "-DSTRATA_BUILD_TESTS=ON") for item in build.configuration(root, headers, bitcode)]
         command.append("-DSTRATA_BUILD_DSV41=ON")
         subprocess.run(command, check=True)
@@ -43,9 +46,10 @@ def main():
         subprocess.run([str(executable), "--version"], check=True, timeout=30)
         for name in CHECKS:
             subprocess.run([str(root / "build-hip" / name)], check=True, timeout=600)
+        subprocess.run([str(root / "build-hip/ds4_iq_test"), "--type", "23"], check=True, timeout=600)
         with executable.open("rb") as file:
             digest = hashlib.file_digest(file, "sha256").hexdigest()
-        receipt.write_text(json.dumps({"source_revision": REVISION, "binary_sha256": digest, "kernel_checks": CHECKS}, indent=2), encoding="utf-8")
+        receipt.write_text(json.dumps({"source_revision": REVISION, "binary_sha256": digest, "kernel_checks": CHECKS, "iq_test_contract": iq_gate.TEST_CONTRACT}, indent=2), encoding="utf-8")
         receipt.chmod(0o600)
         print(f"Build/kernel checks passed; receipt: {receipt}. Model/runtime validation is still required.")
     except (OSError, ValueError, subprocess.SubprocessError) as error:

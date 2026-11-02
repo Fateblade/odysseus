@@ -32,7 +32,7 @@ systemctl --user stop odysseus-inference-router.service
 python3 /mnt/odysseus-fateblade/scripts/odysseus-build-strata-ds41f.py "$HOME/strata-ds41f" --jobs 1
 ~~~
 
-The helper verifies source/dependency pins and effective HIP Release flags, builds the native engine plus three no-weight kernel tests, then runs version discovery and all tests. A successful run writes build-hip/odysseus-build-receipt.json with the binary hash. Configure success alone is insufficient. Do not download weights until this gate passes. Preserve exact build/kernel errors on failure.
+The helper verifies source/dependency pins and effective HIP Release flags, applies the source-guarded test correction described below, builds the native engine plus three no-weight kernel tests, then runs version discovery, all tests, and an additional isolated IQ4_XS check. A successful run writes build-hip/odysseus-build-receipt.json with the binary hash and `iq_test_contract: shared-activations-v1`. Configure success alone is insufficient. Do not download weights until this gate passes. Preserve exact build/kernel errors on failure.
 
 ### IQ4_XS numerical failure on the ROCm7.1 host
 
@@ -45,7 +45,13 @@ set -o pipefail
 python3 /mnt/odysseus-fateblade/scripts/odysseus-diagnose-strata-ds41f.py "$HOME/strata-ds41f" 2>&1 | tee "$HOME/strata-ds41f-iq-diagnostic.log"
 ~~~
 
-The helper checks the pinned revision and pristine test source, temporarily adds shared-activation comparisons, and runs both the full IQ suite and isolated IQ4_XS. It retains every original check and tolerance, restores the original source in a finally block, and rebuilds the original test binary. It does not rebuild the native engine, modify a receipt, or bypass qualification. A nonzero exit is expected while the original failure persists. Preserve the `DIAG` lines and original failures for analysis. If interrupted by a power loss or force-kill, inspect the test source before retrying; the helper refuses local changes.
+The diagnostic helper checks the pinned revision and pristine test source, temporarily adds shared-activation comparisons, and runs both the full IQ suite and isolated IQ4_XS. It retains every original check and tolerance, restores the original source in a finally block, and rebuilds the original test binary. It does not rebuild the native engine, modify a receipt, or bypass qualification. A nonzero exit is expected with the original test. Preserve the `DIAG` lines and original failures for analysis. If interrupted by a power loss or force-kill, inspect the test source before retrying; the helper refuses local changes. This diagnostic is for the original source only, before the correction below is installed.
+
+The host diagnostic subsequently passed both shared-input down comparisons for IQ4_XS: worst 1.44e-4 in the full suite and 1.85e-4 in isolation, against the existing 3e-3 limit. Scalar and WMMA down results also passed the CPU reference on each input. This supports propagated intermediate-activation differences as the explanation for the original end-to-end mismatch; it does not establish model quality.
+
+The build helper now installs a test-only correction guarded by the exact upstream file SHA256. It retains the raw pipeline difference as informational, checks both down paths against each other on both shared inputs, retains the CPU checks, and adds a scalar gate/up CPU check. It additionally gates the pipeline residual `(WMMA_y - scalar_y) - (CPU_D(WMMA_h) - CPU_D(scalar_h))`, normalized by the same CPU absolute-product sum, at 3e-3. This accounts explicitly for the difference propagated through the down projection. No numerical tolerance is increased; native kernels and engine configuration remain unchanged. Nonfinite values in the added comparisons fail. The corrected source remains modified in the isolated checkout; reruns accept only the pristine file or the exact corrected file and reject unrelated edits.
+
+After updating Odysseus, rerun the build command from step 1 with competing engines stopped. Continue to step 2 only if every corrected check and both TQ suites pass and the helper writes a receipt. The correction itself has not yet been executed on the host GPU.
 
 ## 2. Disk space and separate model installation
 
