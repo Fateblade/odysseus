@@ -2,7 +2,7 @@
 
 from services.operations.litellm_config import OperationsError
 
-EXCLUSIVE = ("maya", "maya_glm", "dwarfstar")
+EXCLUSIVE = ("maya", "maya_glm", "dwarfstar", "strata_ds41f")
 
 
 def ensure_available(management, backend):
@@ -18,7 +18,7 @@ def ensure_available(management, backend):
         if state.get("loaded"):
             message = "Stop the other Maya profile" if backend in ("maya", "maya_glm") and other in ("maya", "maya_glm") else f"Stop {other}"
             raise OperationsError(message + " before loading this model. Models are never stopped automatically.", 409)
-        if state.get("configured") and state.get("status") not in ("ok", "unloaded", "disabled", "stopped"):
+        if state.get("configured") and (other == "strata_ds41f" and state.get("status") != "stopped" or state.get("status") not in ("ok", "unloaded", "disabled", "stopped")):
             result = management.service(other, "is-active", check=False)
             if result.returncode != 3 or result.stdout.decode().strip() != "inactive":
                 raise OperationsError(f"{other} is not confirmed stopped. Inspect its service before loading another model.", 409)

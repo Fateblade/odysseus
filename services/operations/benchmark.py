@@ -71,7 +71,7 @@ def sample(management, specification):
 def _sample(management, specification):
     backend = specification["backend"]
     ollama = backend == "ollama"
-    endpoints = {"ollama": management.ollama_url, "strata": management.strata_url, "dwarfstar": management.dwarfstar_url, "maya": management.maya_url, "maya_glm": getattr(management, "maya_glm_url", "")}
+    endpoints = {"ollama": management.ollama_url, "strata": management.strata_url, "dwarfstar": management.dwarfstar_url, "maya": management.maya_url, "maya_glm": getattr(management, "maya_glm_url", ""), "strata_ds41f": getattr(management, "strata_ds41f_url", "")}
     base = endpoints.get(backend)
     if not base:
         raise RuntimeError("The benchmark backend is not configured.")
@@ -83,7 +83,7 @@ def _sample(management, specification):
                        max_tokens=specification["max_tokens"], temperature=0, seed=42, stream_options={"include_usage": True})
     if backend == "dwarfstar":
         payload["think"] = False
-    if backend in ("maya", "maya_glm"):
+    if backend in ("maya", "maya_glm", "strata_ds41f"):
         payload["reasoning_effort"] = "none"
     request = Request(base.rstrip("/") + ("/api/generate" if ollama else "/v1/chat/completions"),
                       data=json.dumps(payload).encode(), headers={"Content-Type": "application/json"})
@@ -159,7 +159,7 @@ def _sample(management, specification):
 
 
 def run(management, specification):
-    if specification["backend"] in ("ollama", "strata"):
+    if specification["backend"] in ("ollama", "strata", "strata_ds41f"):
         from services.operations.exclusivity import ensure_available
         ensure_available(management, specification["backend"])
     from services.operations.scoreboard import summarize
@@ -193,7 +193,7 @@ def run(management, specification):
             "task_summaries": {family: {"runs": sum(row["task"]["family"] == family for row in samples),
                                "summary": summarize([row for row in samples if row["task"]["family"] == family])} for family in families},
             "environment": environment, "prompt_sha256": fingerprints[0] if len(set(fingerprints)) == 1 else None,
-            "thinking": False if specification["backend"] in ("dwarfstar", "maya", "maya_glm") else "backend default",
+            "thinking": False if specification["backend"] in ("dwarfstar", "maya", "maya_glm", "strata_ds41f") else "backend default",
             "note": "Warmup is excluded; caches are not cleared. Distinct tasks reduce shared prompt reuse but do not guarantee cache-free runs. Mixed-task medians combine different workloads. End-to-end TPS includes load, queue and prefill; unavailable timings stay null."}
 
 
@@ -221,7 +221,8 @@ def snapshot(management, specification):
                 environment.update(model_size_bytes=installed[0].get("size_bytes"), model_digest=installed[0].get("digest"),
                                    model_size_source="Ollama installed artifact")
         else:
-            data = (inventory(management.dwarfstar_url) if backend == "dwarfstar" else
+            from services.operations.strata_ds41f import inventory as ds41_inventory
+            data = (ds41_inventory(management.strata_ds41f_url) if backend == "strata_ds41f" else inventory(management.dwarfstar_url) if backend == "dwarfstar" else
                     maya_inventory(management.maya_url) if backend == "maya" else
                     glm_inventory(management.maya_glm_url) if backend == "maya_glm" else overview.strata(management.strata_url))
             environment.update(context_tokens=data.get("max_context"), reported_model=data.get("model"),
@@ -233,6 +234,9 @@ def snapshot(management, specification):
     except Exception:
         environment["metadata_note"] = "Some runtime metadata could not be read."
     declared = specification.get("declared", {})
+    if backend == "strata_ds41f":
+        from services.operations.strata_ds41f import metadata
+        environment["deployment"] = metadata(management)
     environment["declared"] = declared
     if environment["model_size_bytes"] is None and declared.get("model_size_bytes"):
         environment.update(model_size_bytes=declared["model_size_bytes"], model_size_source="user supplied artifact size")

@@ -8,13 +8,17 @@ from services.operations.litellm_host import get_json
 def run_service(management, specification):
     from services.operations.litellm_config import OperationsError
     backend = specification.get("backend", "maya")
-    if backend not in ("maya", "maya_glm", "dwarfstar"):
+    if backend not in ("maya", "maya_glm", "dwarfstar", "strata_ds41f"):
         raise OperationsError("Choose an allowlisted exclusive engine.")
     url = getattr(management, backend + "_url", "")
     probe = glm_inventory if backend == "maya_glm" else inventory
     if backend == "dwarfstar":
         from services.operations.dwarfstar import inventory as dwarfstar_inventory
         probe = lambda base: dwarfstar_inventory(base, management)
+    if backend == "strata_ds41f":
+        from services.operations.strata_ds41f import inventory as probe, qualification
+        if specification.get("operation") in ("start", "restart"):
+            qualification(management)
     operation = specification.get("operation")
     if operation not in ("start", "stop", "restart"):
         raise OperationsError("Unknown inference service operation.")
@@ -25,7 +29,7 @@ def run_service(management, specification):
     require_transition(management.service_state(backend), operation)
     result = management.service(backend, operation)
     if operation in ("start", "restart"):
-        deadline = time.monotonic() + 600
+        deadline = time.monotonic() + (3600 if backend == "strata_ds41f" else 600)
         while time.monotonic() < deadline:
             if probe(url).get("status") == "ok":
                 break
@@ -34,7 +38,11 @@ def run_service(management, specification):
         else:
             raise OperationsError("Engine startup readiness was not verified. Inspect service logs and memory before another job.", 502)
     elif probe(url).get("status") == "ok":
-        raise OperationsError("Maya still answers after the managed service stopped. Inspect other server processes.", 409)
+        raise OperationsError("The inference engine still answers after the managed service stopped. Inspect other server processes.", 409)
+    if backend == "strata_ds41f" and operation == "stop":
+        state = management.service_state(backend)
+        if state.get("state") != "stopped" or state.get("active_state") != "inactive":
+            raise OperationsError("Strata DS41F is not confirmed inactive after stop.", 409)
     return {"status": "ok", "operation": operation,
             "log": (result.stdout + result.stderr)[-65536:].decode(errors="replace"),
             "note": "Readiness verified" if operation != "stop" else "Managed service stopped"}

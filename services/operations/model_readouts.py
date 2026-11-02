@@ -56,11 +56,14 @@ def decorate(management, data):
                     routed.setdefault(route.get("backend"), set()).add(route["model"])
     except (OperationsError, OSError):
         pass
-    for backend in ("strata", "maya", "maya_glm", "dwarfstar"):
+    for backend in ("strata", "maya", "maya_glm", "dwarfstar", "strata_ds41f"):
         value = data.get(backend)
         if not isinstance(value, dict):
             continue
         try:
+            if backend == "strata_ds41f":
+                from services.operations.strata_ds41f import metadata
+                value["deployment"] = metadata(management)
             if backend == "strata":
                 from services.operations.strata_config import profile
                 settings, _, path, _ = profile(management)

@@ -22,8 +22,9 @@ export function initializeBenchmark(parent, { section, field, button, request, t
   const card = section(parent, 'TPS benchmark', 'Compare reproducible workloads. Native decode TPS uses backend timings; end-to-end TPS includes loading, queueing and prefill. Caches are not cleared.', 'operations-benchmark');
   const form = document.createElement('form'); form.addEventListener('submit', event => event.preventDefault()); card.append(form);
   const grid = document.createElement('div'); grid.className = 'operations-grid'; form.append(grid);
-  const backend = field(grid, 'operations-benchmark-backend', 'Backend', 'ollama', ['ollama', 'strata', 'dwarfstar', 'maya', 'maya_glm']);
-  backend.options[backend.options.length - 1].textContent = 'Maya GLM';
+  const backend = field(grid, 'operations-benchmark-backend', 'Backend', 'ollama', ['ollama', 'strata', 'dwarfstar', 'maya', 'maya_glm', 'strata_ds41f']);
+  backend.options[backend.options.length - 2].textContent = 'Maya GLM';
+  backend.options[backend.options.length - 1].textContent = 'Strata DS41F (experimental)';
   const model = field(grid, 'operations-benchmark-model', 'Model name (1–512 characters, no whitespace)');
   model.required = true; model.maxLength = 512; model.pattern = '\\S+'; model.setAttribute('list', suggestions);
   backend.addEventListener('change', () => { const selected = modelForBackend(backend.value); if (selected) model.value = selected; });
@@ -135,7 +136,7 @@ export function initializeBenchmark(parent, { section, field, button, request, t
   tokens.addEventListener('input', renderBudget);
   controls = { family, describe, refreshLimits }; describe(); renderBudget();
   const note = document.createElement('p'); note.className = 'operations-muted';
-  note.textContent = 'The output cap does not force that many tokens: generation can stop at EOS. Input plus output must fit the backend context; a backend may reject a larger cap. Large outputs may need a longer job timeout. DwarfStar and Maya disable thinking; sampling uses temperature 0 and seed 42. Research presets use supplied synthetic notes, without web browsing.';
+  note.textContent = 'The output cap does not force that many tokens: generation can stop at EOS. Input plus output must fit the backend context; a backend may reject a larger cap. Large outputs may need a longer job timeout. DwarfStar, Maya and experimental Strata DS41F disable thinking; sampling uses temperature 0 and seed 42. Research presets use supplied synthetic notes, without web browsing.';
   form.append(note, button('Run benchmark', () => {
     if (!form.reportValidity()) return;
     task(async () => {

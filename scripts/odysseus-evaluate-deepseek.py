@@ -63,7 +63,7 @@ def tool_check(base, backend, model):
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--backend", choices=("maya", "maya_glm", "dwarfstar"), required=True)
+    parser.add_argument("--backend", choices=("maya", "maya_glm", "dwarfstar", "strata_ds41f"), required=True)
     parser.add_argument("--base-url", required=True, help="Native loopback endpoint without /v1")
     parser.add_argument("--model", required=True)
     parser.add_argument("--label", required=True, help="Checkpoint, quantization, engine SHA, context and drafting mode")
@@ -77,6 +77,8 @@ def main():
                             dwarfstar_url=args.base_url if args.backend == "dwarfstar" else "",
                             maya_url=args.base_url if args.backend == "maya" else "",
                             maya_glm_url=args.base_url if args.backend == "maya_glm" else "")
+    if args.backend == "strata_ds41f" and management.strata_ds41f_url.rstrip("/") != args.base_url.rstrip("/"):
+        parser.error("The DS41F base URL must match the isolated management profile.")
     result = {"backend": args.backend, "model": args.model, "label": args.label, "fixtures": []}
     try:
         for prompt in FIXTURES:

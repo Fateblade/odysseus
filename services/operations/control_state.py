@@ -26,7 +26,7 @@ def service_inventory(management, backend, probe, url):
     try:
         state = management.service_state(backend)
         if state.get("state") == "stopped" and state.get("active_state") == "inactive":
-            title = {"strata": "Strata", "maya": "Maya", "maya_glm": "Maya GLM"}[backend]
+            title = {"strata": "Strata", "maya": "Maya", "maya_glm": "Maya GLM", "strata_ds41f": "Strata DS41F"}[backend]
             return {**result, "status": "stopped", "loaded": False,
                     "message": f"{title} service is stopped. Start it from Management when needed."}
     except (OperationsError, OSError):

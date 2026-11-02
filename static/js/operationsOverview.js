@@ -274,6 +274,12 @@ function render(data) {
     card.append(action('Manage GLM', 'management'));
     services.append(card);
   }
+  if (data.strata_ds41f?.configured) {
+    const ds41 = data.strata_ds41f;
+    const card = service(`Strata DS41F (experimental) ${measurementSuffix(ds41)}`, ds41.status === 'ok' ? 'Ready' : ds41.status === 'stopped' ? 'Stopped' : 'Unavailable', ds41.status, ds41.model || ds41.configured_model || ds41.message);
+    card.title = measurementTitle(ds41);
+    card.append(node('p', ds41.message || 'Experimental isolated IST-DAS deployment.', 'operations-muted'), action('Manage Strata DS41F', 'management')); services.append(card);
+  }
   const lite = data.litellm || {};
   const gateway = service('LiteLLM', lite.status === 'ok' ? 'Ready' : text(lite.status), lite.status, 'Inference gateway');
   gateway.append(node('p', lite.message || 'Model aliases, routing and fallbacks.', 'operations-muted'), action('Edit models and routing', 'litellm'));
@@ -326,7 +332,7 @@ async function refresh(manual = false) {
     updateResources(data);
     el('operations-overview-content').hidden = false;
     const unavailable = ['host', 'containers', 'strata', 'ollama', 'litellm', 'processes', 'storage'].filter(key => !['ok', 'stopped'].includes(data[key]?.status));
-    for (const backend of ['dwarfstar', 'maya', 'maya_glm']) {
+    for (const backend of ['dwarfstar', 'maya', 'maya_glm', 'strata_ds41f']) {
       if (data[backend]?.configured && !['ok', 'stopped', 'unloaded'].includes(data[backend].status)) unavailable.push(backend);
     }
     const time = new Date(data.sampled_at * 1000).toLocaleTimeString();

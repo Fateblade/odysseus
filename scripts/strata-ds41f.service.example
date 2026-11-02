@@ -1,0 +1,17 @@
+[Unit]
+Description=Experimental isolated Strata DS41F
+After=network.target
+StartLimitIntervalSec=600
+StartLimitBurst=2
+
+[Service]
+Type=simple
+WorkingDirectory=%h/strata-ds41f
+ExecStart=%h/strata-ds41f/.venv/bin/python -m serve.server --engine strata --config %h/strata-ds41f/odysseus-ds41f.json --host 127.0.0.1 --port 8095 --api-key none
+KillMode=control-group
+TimeoutStopSec=180
+UMask=0077
+Restart=no
+
+[Install]
+WantedBy=default.target

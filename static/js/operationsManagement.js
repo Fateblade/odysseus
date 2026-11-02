@@ -2,8 +2,8 @@ import { measurementSuffix, measurementTitle } from './operationsModelReadout.js
 import { createModelPicker } from './operationsModelPicker.js?v=20261102models1';
 import { initializeInferenceRouting, refreshInferenceRouting } from './operationsInferenceRouting.js?v=20261101editor1';
 import { initializeMayaGlm, renderMayaGlm, refreshMayaGlm, selectedGlmModel } from './operationsMayaGlm.js?v=20261102models1';
-import { initializeBenchmark, setBenchmarkCatalog, refreshBenchmarkLimits } from './operationsBenchmark.js?v=20261025notifications1';
-import { initializeScoreboard, refreshScoreboard } from './operationsScoreboard.js?v=20261025notifications1';
+import { initializeBenchmark, setBenchmarkCatalog, refreshBenchmarkLimits } from './operationsBenchmark.js?v=20261102stratads1';
+import { initializeScoreboard, refreshScoreboard } from './operationsScoreboard.js?v=20261102stratads1';
 import { notify, resetNotification } from './operationsNotifications.js?v=20261025notifications1';
 const el = id => document.getElementById(id);
 let active = null;
@@ -64,7 +64,7 @@ function updateResourceControls() {
       control.disabled ? `Cannot ${operation}: ${state === 'unknown' ? 'waiting for a confirmed current state' : state}.` : '';
   }
   el('operations-docker-state-note').textContent = `Container state: ${controlState('docker', el('operations-docker-name').value)}.`;
-  for (const name of ['maya', 'maya_glm', 'dwarfstar', 'strata', 'ollama']) {
+  for (const name of ['maya', 'maya_glm', 'dwarfstar', 'strata', 'ollama', 'strata_ds41f']) {
     const note = el(`operations-${name.replaceAll('_', '-')}-service-state`);
     const setting = configuredServices[name];
     if (note) note.textContent = setting ? `Service: ${controlState('service', name)}. Unit: ${typeof setting === 'string' ? setting : setting.unit}.` : 'Service control is not configured on the host.';
@@ -211,11 +211,18 @@ function modelSummary(name, details) {
 }
 
 function renderResidency(data) {
-  for (const backend of ['strata', 'maya', 'maya_glm', 'dwarfstar']) {
+  for (const backend of ['strata', 'maya', 'maya_glm', 'dwarfstar', 'strata_ds41f']) {
     const panel = document.querySelector(`.operations-${backend.replaceAll('_', '-')}-residency`);
     const heading = backend === 'strata' ? panel?.closest('.operations-shared-engine')?.querySelector('h2') : panel?.querySelector('h2');
-    const names = { strata: 'Strata', maya: 'Maya DS41F', maya_glm: 'Maya GLM', dwarfstar: 'DwarfStar' };
+    const names = { strata: 'Strata', maya: 'Maya DS41F', maya_glm: 'Maya GLM', dwarfstar: 'DwarfStar', strata_ds41f: 'Strata DS41F (experimental)' };
     if (heading) { heading.textContent = `${names[backend]} ${measurementSuffix(data[backend])}`; heading.title = measurementTitle(data[backend]); }
+  }
+  const ds41 = data.strata_ds41f || {};
+  const ds41Live = el('operations-strata-ds41f-live');
+  if (ds41Live) {
+    ds41Live.replaceChildren(node('p', ds41.status === 'ok' ? 'Model loaded; server ready' : ds41.status === 'stopped' ? 'Service stopped' : ds41.status === 'disabled' ? 'Not configured' : 'Readiness not verified', 'operations-residency-state'));
+    facts(ds41Live, [['Model', ds41.model || ds41.configured_model], ['Runtime context', tokens(ds41.max_context)], ['Weight recipe', ds41.deployment?.recipe], ['Experts', ds41.deployment?.experts], ['Drafter', ds41.deployment?.drafter]]);
+    ds41Live.append(node('p', ds41.message || 'Install and validate the isolated HIP build before starting.', 'operations-muted'));
   }
   const strata = data.strata || {};
   const host = el('operations-strata-live');
@@ -585,10 +592,14 @@ function initialize() {
   output.id = 'operations-management-output';
   outputSection.append(output);
 
+  const strataDs41 = section(content, 'Strata DS41F (experimental)', 'Separate IST-DAS deployment, SSD streaming. Ubuntu gfx1151 / ROCm 7.1 requires device validation; this does not replace Qwen or Maya.', 'operations-strata-ds41f-residency');
+  const ds41Live = node('div', 'Reading status...'); ds41Live.id = 'operations-strata-ds41f-live'; strataDs41.append(ds41Live);
+  engineControls(strataDs41, 'strata_ds41f');
+  strataDs41.append(node('p', 'Start requires a verified build/kernel-test receipt matching the configured binary. Initial startup context is 8192; use the isolated configuration for further context trials.', 'operations-muted'));
   const exclusive = node('div', '', 'operations-engine-group'); exclusive.id = 'operations-exclusive-engines';
   exclusive.append(node('h2', 'Exclusive engines'), node('p', 'Run one at a time. Stop the other exclusive engines and unload Ollama / Strata models before starting. Other models are never stopped automatically.', 'operations-muted'));
   const exclusiveGrid = node('div', '', 'operations-exclusive-grid');
-  exclusiveGrid.append(maya, el('operations-maya-glm-live').closest('section'), dwarfstar);
+  exclusiveGrid.append(maya, el('operations-maya-glm-live').closest('section'), dwarfstar, strataDs41);
   exclusive.append(exclusiveGrid); content.insertBefore(exclusive, strata);
   const shared = node('div', '', 'operations-engine-group operations-shared-engines'); shared.id = 'operations-shared-engines';
   shared.append(node('h2', 'Shared engines'), node('p', 'Ollama and Strata can share the available memory. Keep exclusive engines stopped while using these models.', 'operations-muted'));
@@ -617,7 +628,7 @@ function initialize() {
   jobsContent.hidden = true;
   jobs.append(jobsContent);
   initializeBenchmark(jobsContent, { section, field, button, request, task, confirmOperation, suggestions: suggestions.id,
-    modelForBackend: backend => backend === 'maya_glm' ? selectedGlmModel() : backend === 'strata' ? strataState?.active_model : backend === 'maya' ? mayaAliases[0] || 'deepseek-v4.1-flash' :
+    modelForBackend: backend => backend === 'strata_ds41f' ? 'deepseek-v4.1-flash' : backend === 'maya_glm' ? selectedGlmModel() : backend === 'strata' ? strataState?.active_model : backend === 'maya' ? mayaAliases[0] || 'deepseek-v4.1-flash' :
       backend === 'dwarfstar' ? dwarfstarAliases.find(name => name === 'deepseek-v4-flash') || dwarfstarAliases[0] || 'deepseek-v4-flash' : null,
     started: async result => { selectedJob = result.job.id; await refreshJobs(); status('Benchmark started.'); } });
   initializeScoreboard(jobsContent, { section, field, button, request, task, inspect: async id => { selectedJob = id; await refreshDetail(); el('operations-job-output').scrollIntoView({ block: 'nearest' }); } });

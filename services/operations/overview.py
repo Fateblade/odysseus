@@ -236,7 +236,8 @@ def collect(base_url, strata_url, ollama_url, physical_memory_gib=0, config_path
     if platform.system() != "Linux" or running_in_container():
         return {"configured": False, "message": "Connect the helper on the Linux host. Container and Windows readings are not substituted for host telemetry."}
     from services.operations.control_state import service_inventory
-    jobs = {"host": lambda: host_metrics(physical_memory_gib), "containers": containers,
+    from services.operations.strata_ds41f import inventory as ds41_inventory
+    jobs = {"strata_ds41f": lambda: service_inventory(management, "strata_ds41f", ds41_inventory, getattr(management, "strata_ds41f_url", "")), "host": lambda: host_metrics(physical_memory_gib), "containers": containers,
             "strata": lambda: service_inventory(management, "strata", strata, strata_url), "ollama": lambda: ollama(ollama_url),
             "dwarfstar": lambda: inventory(dwarfstar_url, management), "maya": lambda: service_inventory(management, "maya", maya_inventory, maya_url), "maya_glm": lambda: service_inventory(management, "maya_glm", glm_inventory, maya_glm_url),
             "litellm": lambda: litellm(base_url), "processes": processes,

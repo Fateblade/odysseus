@@ -14,6 +14,11 @@ def limits(management, payload, workload=None):
     if backend in ("maya", "maya_glm"):
         probe = maya.glm_inventory if backend == "maya_glm" else maya.inventory
         live = probe(getattr(management, backend + "_url", ""))
+    elif backend == "strata_ds41f":
+        from services.operations.strata_ds41f import inventory
+        live = inventory(getattr(management, "strata_ds41f_url", ""))
+        if live.get("status") != "ok":
+            raise OperationsError("Start and verify the isolated Strata DS41F model before benchmarking.", 409)
     elif backend == "dwarfstar":
         live = dwarfstar.inventory(getattr(management, "dwarfstar_url", ""))
     elif backend == "strata":
@@ -65,6 +70,12 @@ def limits(management, payload, workload=None):
         prompt = max(counts.values())
         result.update(prompt_tokens=prompt, exact=True, max_output_tokens=min(MAX_OUTPUT_TOKENS, max(0, context - reserve - prompt)),
                       message="Exact budget for the largest prompt across measured tasks and warmup, including Maya's engine reserve.")
+    if backend == "strata_ds41f" and context and workload is not None:
+        tasks = list(workload["tasks"]) + ([workload["warmup_task"]] if payload.get("warmup", True) else [])
+        # UTF-8 bytes bound ordinary text tokens; reserve also covers template overhead.
+        prompt = max(len(item["prompt"].encode("utf-8")) for item in tasks) + 2048
+        result.update(prompt_tokens=prompt, max_output_tokens=min(MAX_OUTPUT_TOKENS, max(0, context - prompt)),
+                      message="Conservative UTF-8 byte allowance plus 2048 template tokens; not exact engine tokenization. Start with small tasks.")
     return result
 
 

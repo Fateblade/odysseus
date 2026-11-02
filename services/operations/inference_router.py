@@ -22,7 +22,7 @@ from services.operations.inference_backends import NativeEngines
 from services.operations.inference_lifecycle import runtime_lease
 from services.operations.litellm_config import OperationsError
 
-BACKENDS = {"strata", "ollama", "dwarfstar", "maya", "maya_glm"}
+BACKENDS = {"strata", "ollama", "dwarfstar", "maya", "maya_glm", "strata_ds41f"}
 PATHS = {"/v1/chat/completions", "/v1/completions", "/v1/embeddings", "/v1/responses", "/api/chat", "/api/generate", "/api/embed", "/api/embeddings"}
 MAX_BODY = 16 * 1024 * 1024
 
@@ -44,7 +44,7 @@ def validate_routes(value, management):
         parsed = urlsplit(url)
         if parsed.scheme != "http" or parsed.hostname not in ("127.0.0.1", "localhost", "::1") or parsed.username or parsed.query or parsed.fragment or parsed.path not in ("", "/"):
             raise ValueError("Managed backend endpoints must be fixed loopback HTTP origins.")
-        if backend in ("maya", "maya_glm", "dwarfstar") and backend not in management.settings.get("services", {}):
+        if backend in ("maya", "maya_glm", "dwarfstar", "strata_ds41f") and backend not in management.settings.get("services", {}):
             raise ValueError("Exclusive engine routes require an allowlisted systemd service.")
         result[alias] = {"backend": backend, "model": model, "keep_alive_seconds": float(ttl), "url": url.rstrip("/")}
     return result
@@ -59,7 +59,7 @@ def validate_configuration(value, management):
     port = value.get("port", 8094)
     occupied = set()
     for backend in BACKENDS:
-        url = urls.get(backend, "")
+        url = urls.get(backend, getattr(management, backend + "_url", "") if backend == "strata_ds41f" else "")
         if url:
             parsed = urlsplit(url)
             if parsed.scheme != "http" or parsed.hostname not in ("localhost", "127.0.0.1", "::1") or parsed.username or parsed.password or parsed.query or parsed.fragment or parsed.path not in ("", "/") or parsed.port == port:

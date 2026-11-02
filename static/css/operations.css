@@ -239,7 +239,7 @@ body.operations-page { --operations-muted: color-mix(in srgb, var(--fg) 68%, var
 .operations-maya-glm-residency .operations-field { max-width: 320px; margin-top: 16px; }
 
 .operations-engine-group { grid-column: 1 / -1; min-width: 0; padding-top: 24px; border-top: 1px solid var(--border); }
-.operations-exclusive-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 20px; align-items: start; }
+.operations-exclusive-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 20px; align-items: start; }
 .operations-shared-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 20px; align-items: start; }
 .operations-exclusive-grid > section, .operations-shared-grid > section { grid-column: auto; grid-row: auto; min-width: 0; }
 .operations-exclusive-grid .operations-card > h2 { margin-bottom: 8px; }
@@ -294,3 +294,5 @@ body.operations-page { --operations-muted: color-mix(in srgb, var(--fg) 68%, var
 .operations-model-options > button { display: block; width: 100%; text-align: left; white-space: normal; overflow-wrap: anywhere; background: var(--bg); color: var(--fg); border: 0; padding: 12px; cursor: pointer; font: inherit; }
 .operations-model-options > button:hover, .operations-model-options > button[aria-selected=true] { outline: 1px solid var(--fg); outline-offset: -1px; }
 .operations-model-options span { display: block; font-size: 11px; color: var(--operations-muted); }
+
+@media (min-width: 1800px) { .operations-exclusive-grid { grid-template-columns: repeat(4, minmax(0, 1fr)); } }

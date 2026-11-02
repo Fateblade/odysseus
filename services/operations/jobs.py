@@ -159,11 +159,11 @@ def execute(management, payload):
         if payload.get("kind") == "benchmark":
             from services.operations.management import model_name
             backend = payload.get("backend")
-            if backend not in ("ollama", "strata", "dwarfstar", "maya", "maya_glm"):
+            if backend not in ("ollama", "strata", "dwarfstar", "maya", "maya_glm", "strata_ds41f"):
                 raise OperationsError("Choose Ollama, Strata, DwarfStar, Maya DS41F or Maya GLM.")
             if backend == "dwarfstar" and not management.dwarfstar_url:
                 raise OperationsError("Configure the DwarfStar endpoint on the host helper first.", 503)
-            if backend in ("maya", "maya_glm") and not getattr(management, backend + "_url", ""):
+            if backend in ("maya", "maya_glm", "strata_ds41f") and not getattr(management, backend + "_url", ""):
                 raise OperationsError("Configure the Maya endpoint on the host helper first.", 503)
             from services.operations.benchmark_tasks import plan, MAX_RUNS, MAX_OUTPUT_TOKENS
             runs, tokens = payload.get("runs", 3), payload.get("max_tokens", 256)

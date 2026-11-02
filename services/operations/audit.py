@@ -151,7 +151,7 @@ def request_fields(payload):
     fields = {key: payload.get(key) for key in ("backend", "model", "context", "operation", "name", "destination")}
     fields["action"] = payload.get("action") or payload.get("kind")
     if payload.get("target"):
-        fields["backend"] = payload["name"] if payload["target"] == "service" and payload.get("name") in ("maya", "maya_glm") else payload["target"]
+        fields["backend"] = payload["name"] if payload["target"] == "service" and payload.get("name") in ("maya", "maya_glm", "strata_ds41f") else payload["target"]
     elif str(payload.get("action", "")).startswith("maya_glm_"):
         fields["backend"] = "maya_glm"
     return fields

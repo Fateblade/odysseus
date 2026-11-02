@@ -10,6 +10,7 @@ const sections = {
     ['containers', 'Containers', '.operations-control-docker'],
     ['exclusive', 'Exclusive engines', '#operations-exclusive-engines'],
     ['maya', 'Maya DS41F', '.operations-maya-residency'], ['maya-glm', 'Maya GLM', '.operations-maya-glm-residency'],
+    ['strata-ds41f', 'Strata DS41F trial', '.operations-strata-ds41f-residency'],
     ['dwarfstar', 'DwarfStar residency', '.operations-dwarfstar-residency'],
     ['shared', 'Shared engines', '#operations-shared-engines'],
     ['strata', 'Strata residency', '.operations-strata-residency'], ['ollama', 'Ollama residency', '.operations-ollama-residency'],

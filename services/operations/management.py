@@ -48,6 +48,31 @@ class Management:
         for setting in self.settings.get("services", {}).values():
             if not isinstance(setting, (str, dict)):
                 raise OperationsError("Each host management service must be a unit-name string or an object containing unit and scope.", 503)
+        experiment = self.settings.get("strata_ds41f_setup", {})
+        if not isinstance(experiment, dict):
+            raise OperationsError("strata_ds41f_setup must be a JSON object.", 503)
+        self.strata_ds41f_url = experiment.get("url", "")
+        if not isinstance(self.strata_ds41f_url, str):
+            raise OperationsError("Strata DS41F URL must be a string.", 503)
+        if self.strata_ds41f_url:
+            from urllib.parse import urlsplit
+            try:
+                parsed = urlsplit(self.strata_ds41f_url)
+                if parsed.scheme != "http" or parsed.hostname not in ("127.0.0.1", "localhost", "::1") or parsed.username or parsed.password or parsed.query or parsed.fragment or parsed.path not in ("", "/"):
+                    raise ValueError()
+                parsed.port
+            except ValueError:
+                raise OperationsError("Strata DS41F needs a native loopback HTTP origin without credentials or a path.", 503) from None
+        if self.strata_ds41f_url and self.strata_ds41f_url.rstrip("/") in {strata_url.rstrip("/"), maya_url.rstrip("/"), maya_glm_url.rstrip("/"), dwarfstar_url.rstrip("/")}:
+            raise OperationsError("Strata DS41F must have its own endpoint, separate from existing engines.", 503)
+        if self.strata_ds41f_url:
+            services = self.settings.get("services", {})
+            def unit_name(name):
+                setting = services.get(name)
+                return setting if isinstance(setting, str) else (setting or {}).get("unit")
+            candidate = unit_name("strata_ds41f")
+            if candidate and any(unit_name(name) == candidate for name in ("strata", "maya", "maya_glm", "dwarfstar", "ollama")):
+                raise OperationsError("Strata DS41F must use a separate systemd unit.", 503)
         self.strata_url = strata_url
         self.ollama_url = ollama_url
         self.dwarfstar_url = dwarfstar_url
@@ -65,7 +90,7 @@ class Management:
                 raise OperationsError("Maya GLM and DS41F must use different systemd units.", 503)
 
     def catalog(self):
-        names = ["strata", "ollama"] + (["dwarfstar"] if self.dwarfstar_url else []) + (["maya"] if self.maya_url else []) + (["maya_glm"] if self.maya_glm_url else [])
+        names = ["strata", "ollama"] + (["strata_ds41f"] if self.strata_ds41f_url else []) + (["dwarfstar"] if self.dwarfstar_url else []) + (["maya"] if self.maya_url else []) + (["maya_glm"] if self.maya_glm_url else [])
         return {"containers": self.settings.get("containers", []),
                 "protected_containers": self.settings.get("protected_containers", ["odysseus-odysseus-1"]),
                 "services": self.settings.get("services", {}),
@@ -115,14 +140,16 @@ class Management:
         from services.operations.maya import inventory as maya_inventory, glm_inventory
 
         from services.operations.control_state import service_inventory
-        with ThreadPoolExecutor(max_workers=6) as executor:
+        from services.operations.strata_ds41f import inventory as ds41_inventory
+        with ThreadPoolExecutor(max_workers=7) as executor:
+            ds41_result = executor.submit(service_inventory, self, "strata_ds41f", ds41_inventory, self.strata_ds41f_url)
             controls_result = executor.submit(self.control_states)
             strata_result = executor.submit(service_inventory, self, "strata", strata, self.strata_url)
             ollama_result = executor.submit(ollama, self.ollama_url)
             dwarfstar_result = executor.submit(inventory, self.dwarfstar_url, self)
             maya_result = executor.submit(service_inventory, self, "maya", maya_inventory, self.maya_url)
             glm_result = executor.submit(service_inventory, self, "maya_glm", glm_inventory, self.maya_glm_url)
-            result = {"configured": True, "strata": strata_result.result(),
+            result = {"configured": True, "strata_ds41f": ds41_result.result(), "strata": strata_result.result(),
                     "ollama": ollama_result.result(), "dwarfstar": dwarfstar_result.result(), "maya": maya_result.result(), "maya_glm": glm_result.result(), "sampled_at": time.time(), **controls_result.result()}
 
         from services.operations.model_readouts import decorate
@@ -179,14 +206,14 @@ class Management:
         if target == "service":
             if operation not in ("start", "stop", "restart", "status", "logs"):
                 raise OperationsError("Unknown service operation.")
-            if payload.get("name") in ("maya", "maya_glm", "dwarfstar") and operation in ("start", "stop", "restart"):
+            if payload.get("name") in ("maya", "maya_glm", "dwarfstar", "strata_ds41f") and operation in ("start", "stop", "restart"):
                 backend = payload["name"]
                 if not getattr(self, backend + "_url") or backend not in self.settings.get("services", {}):
                     raise OperationsError("Configure an explicit systemd unit and endpoint for this allowlisted inference service first.", 503)
                 from services.operations.control_state import require_transition
                 require_transition(self.service_state(backend), operation)
                 from services.operations.jobs import enqueue
-                return enqueue(self, {"kind": "inference_service" if backend == "dwarfstar" else "maya_service", "backend": backend, "operation": operation, "timeout": 900})
+                return enqueue(self, {"kind": "inference_service" if backend in ("dwarfstar", "strata_ds41f") else "maya_service", "backend": backend, "operation": operation, "timeout": 3900 if backend == "strata_ds41f" else 900})
             if operation in ("start", "stop", "restart") and payload.get("name") in self.settings.get("services", {}):
                 from services.operations.control_state import require_transition
                 require_transition(self.service_state(payload["name"]), operation)

@@ -19,6 +19,9 @@ class NativeEngines:
             return self.probe(backend)
         from services.operations import overview, maya, dwarfstar
         url = getattr(self.management, backend + "_url", "")
+        if backend == "strata_ds41f":
+            from services.operations.strata_ds41f import inventory
+            return inventory(url)
         if backend == "dwarfstar":
             return dwarfstar.inventory(url, self.management)
         probe = {"strata": overview.strata, "ollama": overview.ollama, "maya": maya.inventory, "maya_glm": maya.glm_inventory}[backend]
@@ -70,6 +73,9 @@ class NativeEngines:
                 raise OperationsError("Ollama unload was not confirmed.", 409)
 
     def prepare(self, backend, model):
+        if backend == "strata_ds41f":
+            from services.operations.strata_ds41f import qualification
+            qualification(self.management)
         host = self.management
         for other in (*EXCLUSIVE, "strata", "ollama"):
             if other == backend or not getattr(host, other + "_url", ""):
@@ -92,7 +98,7 @@ class NativeEngines:
                 raise OperationsError("Strata refused loading.", 409)
         if backend in EXCLUSIVE and value.get("loaded") is False:
             host.service(backend, "restart")
-        deadline = time.monotonic() + self.startup_timeout
+        deadline = time.monotonic() + (3600 if backend == "strata_ds41f" else self.startup_timeout)
         while time.monotonic() < deadline:
             value = self.live(backend)
             if value.get("loaded") is True and value.get("status") == "ok":
@@ -107,6 +113,9 @@ class NativeEngines:
             api(self.management.ollama_url, "/api/generate", {"model": model, "keep_alive": -1, "stream": False}, timeout=30)
 
     def ensure_server(self, backend):
+        if backend == "strata_ds41f":
+            from services.operations.strata_ds41f import qualification
+            qualification(self.management)
         host = self.management
         value = self.live(backend)
         ready = value.get("loaded_available") if backend == "ollama" else value.get("status") in ("ok", "degraded", "unloaded")
@@ -117,7 +126,7 @@ class NativeEngines:
             host.service(backend, "start")
         elif state != "running":
             raise OperationsError(f"{backend} has an unknown or changing service state.", 409)
-        deadline = time.monotonic() + self.startup_timeout
+        deadline = time.monotonic() + (3600 if backend == "strata_ds41f" else self.startup_timeout)
         while time.monotonic() < deadline:
             value = self.live(backend)
             ready = value.get("loaded_available") if backend == "ollama" else value.get("status") in ("ok", "degraded", "unloaded")
