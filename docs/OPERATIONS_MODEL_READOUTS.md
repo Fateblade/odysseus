@@ -1,0 +1,11 @@
+# Model readouts and selection
+
+Operations shows the latest completed, saved benchmark for each exact backend/model identity beside dedicated engines and Ollama model names. Native decode TPS is preferred within that latest result; client end-to-end TPS is explicitly labelled when native decode timing is absent. The readout does not select the highest historical rate. Matching includes verified reported-model names and live aliases; a stopped engine can use an explicit configured model name. It never borrows a result from another backend or a substring match. No match displays `(unmeasured)`; unreadable measurement storage displays `(measurement unavailable)`.
+
+Results are historical: context, MTP, cache state, source revision and workloads can differ from the current deployment. The hover text includes the measurement date/context. Earlier measurements remain in the scoreboard unchanged. Missing configured/live identity stays unmeasured rather than guessing a model from an engine-wide rate.
+
+Strata reads the active model from health, or its model_name from the selected generated host configuration while stopped. Family and quantization are shown separately in Management. The existing Strata selector is a host allowlist of quantizations, not discovery of all upstream model families.
+
+Upstream currently documents Qwen3.8-Flash-Next variants, Qwen3.6-35B-A3B packs and DeepSeekV4.1-Flash-1017. Availability depends on fork/version/backend; in particular the upstream DeepSeek Strix Halo guidance lists Windows, not qualification of the working Ubuntu installation. The mw00 fork used by some deployments documents a narrower Qwen-focused setup. These are not automatic additions to the installed model list. Sources: [upstream models](https://github.com/Niko1221/Strata#models), [mw00 fork](https://github.com/mw00/Strata).
+
+Ollama Management has a searchable installed-model picker with complete wrapping names, loaded-first sorting, a loaded marker, arrow/Enter selection and Escape dismissal. Browse installed models opens the full list regardless of the current input. Free text remains available for pull/copy operations. Model strings sent to the backend remain exact; benchmark suffixes are display text only. The benchmark form retains its separate model suggestions.

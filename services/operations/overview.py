@@ -249,5 +249,7 @@ def collect(base_url, strata_url, ollama_url, physical_memory_gib=0, config_path
                 result[name] = future.result()
             except Exception:
                 result[name] = {"status": "unavailable", "message": "This source could not be sampled."}
+    from services.operations.model_readouts import decorate
+    decorate(management, result)
     associate_containers(result.get("processes", {}), result.get("containers", {}))
     return result

@@ -286,3 +286,11 @@ body.operations-page { --operations-muted: color-mix(in srgb, var(--fg) 68%, var
 .operations-retention-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 240px), 1fr)); gap: 24px; margin: 20px 0; }
 .operations-retention-grid article { min-width: 0; }
 .operations-retention-grid .operations-field { max-width: 320px; }
+
+.operations-model-picker { position: relative; display: grid; gap: 8px; min-width: 0; }
+.operations-model-picker > button { justify-self: start; }
+.operations-model-options { position: absolute; z-index: 20; top: 100%; left: 0; right: 0; max-height: 360px; overflow-y: auto; background: var(--bg); border: 1px solid var(--border); padding: 8px; box-shadow: 0 8px 24px #0005; }
+.operations-model-options[hidden] { display: none; }
+.operations-model-options > button { display: block; width: 100%; text-align: left; white-space: normal; overflow-wrap: anywhere; background: var(--bg); color: var(--fg); border: 0; padding: 12px; cursor: pointer; font: inherit; }
+.operations-model-options > button:hover, .operations-model-options > button[aria-selected=true] { outline: 1px solid var(--fg); outline-offset: -1px; }
+.operations-model-options span { display: block; font-size: 11px; color: var(--operations-muted); }

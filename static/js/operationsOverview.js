@@ -1,3 +1,4 @@
+import { measurementSuffix, measurementTitle } from './operationsModelReadout.js?v=20261102models1';
 import { notify, resetNotification } from './operationsNotifications.js?v=20261025notifications1';
 import { updateResources, markResourcesStale } from './operationsResources.js?v=20261024resources1';
 const el = id => document.getElementById(id);
@@ -237,11 +238,12 @@ function render(data) {
   const services = el('operations-services');
   services.replaceChildren();
   const strata = data.strata || {};
-  const strataCard = service('Strata', strata.status === 'stopped' ? 'Stopped' : strata.loaded === true ? 'Loaded' : strata.loaded === false ? 'Unloaded' : text(strata.status),
-    strata.status === 'stopped' ? 'stopped' : strata.loaded === false ? 'unloaded' : strata.status, strata.model || strata.message || 'Model unavailable');
+  const strataCard = service(`Strata ${measurementSuffix(strata)}`, strata.status === 'stopped' ? 'Stopped' : strata.loaded === true ? 'Loaded' : strata.loaded === false ? 'Unloaded' : text(strata.status),
+    strata.status === 'stopped' ? 'stopped' : strata.loaded === false ? 'unloaded' : strata.status, strata.model || strata.configured_model || strata.message || 'Model unavailable');
   if (strata.status !== 'stopped') strataCard.append(facts([['Context tokens', strata.max_context], ['Generation', percentless(strata.generation_tps)], ['Prefill', percentless(strata.prefill_tps)]]));
   if (strata.status !== 'stopped') strataCard.append(node('p', `Engine ${text(strata.version)}. ${text(strata.state)}; ${text(strata.queued)} queued.`, 'operations-muted'));
   strataCard.append(action('Manage Strata', 'management'));
+  strataCard.title = measurementTitle(strata);
   services.append(strataCard);
   const ollama = data.ollama || {};
   const ollamaCard = service('Ollama', ollama.status === 'ok' ? 'Ready' : text(ollama.status), ollama.status,
@@ -249,22 +251,25 @@ function render(data) {
   ollamaCard.append(node('p', ollama.installed_available ? `${ollama.installed.length} installed models` : ollama.message || 'Installed models unavailable', 'operations-muted'), action('Manage models', 'management'));
   services.append(ollamaCard);
   const dwarfstar = data.dwarfstar || {};
-  const dwarfstarCard = service('DwarfStar', dwarfstar.status === 'ok' ? 'Ready' : dwarfstar.status === 'stopped' ? 'Stopped' : dwarfstar.configured ? 'Unavailable' : 'Not configured',
+  const dwarfstarCard = service(`DwarfStar ${measurementSuffix(dwarfstar)}`, dwarfstar.status === 'ok' ? 'Ready' : dwarfstar.status === 'stopped' ? 'Stopped' : dwarfstar.configured ? 'Unavailable' : 'Not configured',
     dwarfstar.status, dwarfstar.model || dwarfstar.message || 'Optional DeepSeek V4 Flash backend');
   if (dwarfstar.status === 'ok') dwarfstarCard.append(facts([['Context tokens', dwarfstar.max_context]]));
   dwarfstarCard.append(node('p', 'The server holds one startup-selected model. Unload competing large models before starting it.', 'operations-muted'), action('Manage DwarfStar', 'management'));
+  dwarfstarCard.title = measurementTitle(dwarfstar);
   services.append(dwarfstarCard);
   if (data.maya?.configured) {
     const maya = data.maya;
-    const card = service('Maya', maya.status === 'ok' ? 'Ready' : maya.status === 'stopped' ? 'Stopped' : maya.status === 'unloaded' ? 'Unloaded' : 'Unavailable', maya.status,
-      maya.model || maya.message);
+    const card = service(`Maya ${measurementSuffix(maya)}`, maya.status === 'ok' ? 'Ready' : maya.status === 'stopped' ? 'Stopped' : maya.status === 'unloaded' ? 'Unloaded' : 'Unavailable', maya.status,
+      maya.model || maya.configured_model || maya.message);
+    card.title = measurementTitle(maya);
     if (maya.status !== 'stopped') card.append(facts([['Context tokens', maya.max_context], ['Version', maya.version]]));
     card.append(action('Manage Maya', 'management'));
     services.append(card);
   }
   if (data.maya_glm?.configured) {
     const glm = data.maya_glm;
-    const card = service('Maya GLM', glm.status === 'ok' ? 'Ready' : glm.status === 'stopped' ? 'Stopped' : glm.status === 'unloaded' ? 'Unloaded' : 'Unavailable', glm.status, glm.model || glm.message);
+    const card = service(`Maya GLM ${measurementSuffix(glm)}`, glm.status === 'ok' ? 'Ready' : glm.status === 'stopped' ? 'Stopped' : glm.status === 'unloaded' ? 'Unloaded' : 'Unavailable', glm.status, glm.model || glm.configured_model || glm.message);
+    card.title = measurementTitle(glm);
     if (glm.status !== 'stopped') card.append(facts([['Context tokens', glm.max_context], ['Version', glm.version]]));
     card.append(action('Manage GLM', 'management'));
     services.append(card);
@@ -281,10 +286,10 @@ function render(data) {
   ]), data.containers?.message || 'No containers found.');
   const loadedNames = new Set((ollama.loaded || []).map(model => model.name));
   table('operations-ollama-models', ['Model', 'Disk size', 'State'], (ollama.installed || []).map(model => [
-    model.name, gib(model.size_bytes), badge(ollama.loaded_available ? loadedNames.has(model.name) ? 'Loaded' : 'On disk' : 'Unknown', loadedNames.has(model.name) && ollama.loaded_available ? 'Loaded' : 'on-disk'),
+    `${model.name} ${measurementSuffix(model)}`, gib(model.size_bytes), badge(ollama.loaded_available ? loadedNames.has(model.name) ? 'Loaded' : 'On disk' : 'Unknown', loadedNames.has(model.name) && ollama.loaded_available ? 'Loaded' : 'on-disk'),
   ]), ollama.message || 'No Ollama models installed.');
   el('operations-loaded-models').textContent = ollama.loaded_available
-    ? ollama.loaded.length ? ollama.loaded.map(model => `${model.name} · ${gib(model.size_bytes)} runtime · context ${text(model.context_length)}`).join('\n') : 'No Ollama models are loaded.'
+    ? ollama.loaded.length ? ollama.loaded.map(model => `${model.name} ${measurementSuffix(model)} · ${gib(model.size_bytes)} runtime · context ${text(model.context_length)}`).join('\n') : 'No Ollama models are loaded.'
     : 'Loaded-model inventory unavailable.';
 }
 

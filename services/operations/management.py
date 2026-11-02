@@ -122,8 +122,11 @@ class Management:
             dwarfstar_result = executor.submit(inventory, self.dwarfstar_url, self)
             maya_result = executor.submit(service_inventory, self, "maya", maya_inventory, self.maya_url)
             glm_result = executor.submit(service_inventory, self, "maya_glm", glm_inventory, self.maya_glm_url)
-            return {"configured": True, "strata": strata_result.result(),
+            result = {"configured": True, "strata": strata_result.result(),
                     "ollama": ollama_result.result(), "dwarfstar": dwarfstar_result.result(), "maya": maya_result.result(), "maya_glm": glm_result.result(), "sampled_at": time.time(), **controls_result.result()}
+
+        from services.operations.model_readouts import decorate
+        return decorate(self, result)
 
     def service(self, name, operation, check=True):
         setting = self.settings.get("services", {}).get(name)

@@ -1,5 +1,7 @@
+import { measurementSuffix, measurementTitle } from './operationsModelReadout.js?v=20261102models1';
+import { createModelPicker } from './operationsModelPicker.js?v=20261102models1';
 import { initializeInferenceRouting, refreshInferenceRouting } from './operationsInferenceRouting.js?v=20261101editor1';
-import { initializeMayaGlm, renderMayaGlm, refreshMayaGlm, selectedGlmModel } from './operationsMayaGlm.js?v=20261102stopped1';
+import { initializeMayaGlm, renderMayaGlm, refreshMayaGlm, selectedGlmModel } from './operationsMayaGlm.js?v=20261102models1';
 import { initializeBenchmark, setBenchmarkCatalog, refreshBenchmarkLimits } from './operationsBenchmark.js?v=20261025notifications1';
 import { initializeScoreboard, refreshScoreboard } from './operationsScoreboard.js?v=20261025notifications1';
 import { notify, resetNotification } from './operationsNotifications.js?v=20261025notifications1';
@@ -27,6 +29,7 @@ let serviceStates = {};
 let containerStates = {};
 let controlSampledAt = 0;
 let strataResidency = {};
+let modelPicker;
 let inferenceBusy = false;
 const pendingControls = new Map();
 
@@ -208,13 +211,19 @@ function modelSummary(name, details) {
 }
 
 function renderResidency(data) {
+  for (const backend of ['strata', 'maya', 'maya_glm', 'dwarfstar']) {
+    const panel = document.querySelector(`.operations-${backend.replaceAll('_', '-')}-residency`);
+    const heading = backend === 'strata' ? panel?.closest('.operations-shared-engine')?.querySelector('h2') : panel?.querySelector('h2');
+    const names = { strata: 'Strata', maya: 'Maya DS41F', maya_glm: 'Maya GLM', dwarfstar: 'DwarfStar' };
+    if (heading) { heading.textContent = `${names[backend]} ${measurementSuffix(data[backend])}`; heading.title = measurementTitle(data[backend]); }
+  }
   const strata = data.strata || {};
   const host = el('operations-strata-live');
   const reachable = ['ok', 'degraded'].includes(strata.status);
   const state = strata.status === 'stopped' ? 'Service stopped' : !reachable ? 'Unknown — server unreachable' : strata.loaded === true ? 'Loaded in memory' : strata.loaded === false ? 'Unloaded' : 'Residency not reported';
   host.replaceChildren(node('p', state, 'operations-residency-state'));
   facts(host, [['Server', reachable ? strata.status === 'ok' ? 'Ready' : 'Degraded' : strata.status === 'stopped' ? 'Stopped' : 'Unavailable'],
-    ['Reported model', strata.model], ['Runtime context', tokens(strata.max_context)],
+    ['Model', strata.model || strata.configured_model], ['Configured family / quantization', [strata.family, strata.quantization].filter(Boolean).join(' / ') || null], ['Runtime context', tokens(strata.max_context)],
     ['Engine state', strata.state], ['Queued requests', strata.queued],
     ['Generated tokens', strata.activity?.generated],
     ['Request elapsed', Number.isFinite(strata.activity?.elapsed_s) ? `${strata.activity.elapsed_s} s` : 'Not reported']]);
@@ -247,7 +256,7 @@ function renderResidency(data) {
   } else {
     for (const model of ollama.loaded) {
       const item = node('article', '', 'operations-resident-model');
-      item.append(node('h3', model.name));
+      const heading = node('h3', `${model.name} ${measurementSuffix(model)}`); heading.title = measurementTitle(model); item.append(heading);
       const expiry = Date.parse(model.expires_at);
       const remaining = expiry - data.sampled_at * 1000;
       const expires = !Number.isFinite(expiry) ? 'Not reported' : new Date(expiry).getUTCFullYear() >= 9999 ? 'Kept loaded' :
@@ -258,6 +267,7 @@ function renderResidency(data) {
     }
   }
   if (ollama.installed_available) {
+    modelPicker?.update(ollama.installed || [], ollama.loaded || []);
     el('operations-model-suggestions').replaceChildren(...(ollama.installed || []).map(model => {
       const option = node('option'); option.value = model.name; return option;
     }));
@@ -496,6 +506,7 @@ function initialize() {
   dwarfstar.append(dwarfstarStatus, button('Reload settings', () => task(loadDwarfstar)), dwarfstarFields);
   content.insertBefore(dwarfstar, maya);
   const configuration = section(content, 'Strata configuration', 'Choose quantization and context. Applying prepares the model, restarts Strata and verifies the result. New quantizations may need a download.', 'operations-strata-configuration');
+  configuration.append(node('p', 'These selections are host-allowlisted quantizations of the configured model family. Other upstream model families require a separate compatible setup.', 'operations-muted'));
   const contextStatus = node('p', 'Loading Strata configuration…', 'operations-status');
   contextStatus.id = 'operations-strata-config-status';
   configuration.append(contextStatus);
@@ -551,7 +562,7 @@ function initialize() {
   const suggestions = node('datalist');
   suggestions.id = 'operations-model-suggestions';
   models.append(suggestions);
-  el('operations-model-name').setAttribute('list', suggestions.id);
+  modelPicker = createModelPicker(el('operations-model-name'));
   field(models, 'operations-model-destination', 'Destination name (for copy)', '');
   const modelActions = node('div', '', 'cookbook-actions');
   ['show', 'pull', 'copy', 'load', 'unload', 'delete'].forEach(operation => modelActions.append(button(operation, () => task(() => manage({
