@@ -100,3 +100,14 @@ def test_strata_state_is_rechecked_before_queueing(monkeypatch):
     monkeypatch.setattr(jobs, "enqueue", lambda *_: pytest.fail("Redundant load must not be queued"))
     with pytest.raises(OperationsError, match="Cannot load"):
         host.execute({"target": "strata", "operation": "load"})
+
+
+@pytest.mark.parametrize("backend", ["strata", "maya", "maya_glm"])
+@pytest.mark.parametrize("active", ["inactive", "failed", "active", None])
+def test_service_inventory_only_labels_confirmed_inactive_units_stopped(backend, active):
+    from services.operations.control_state import service_inventory
+    host = SimpleNamespace(service_state=lambda name: {"state": "stopped" if active in ("inactive", "failed") else "unknown", "active_state": active})
+    result = service_inventory(host, backend, lambda url: {"status": "unavailable", "configured": True}, "http://native")
+    assert result["status"] == ("stopped" if active == "inactive" else "unavailable")
+    ready = service_inventory(host, backend, lambda url: {"status": "ok", "loaded": True}, "http://native")
+    assert ready["status"] == "ok" and ready["loaded"] is True

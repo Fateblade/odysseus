@@ -1,5 +1,5 @@
 import { initializeInferenceRouting, refreshInferenceRouting } from './operationsInferenceRouting.js?v=20261101editor1';
-import { initializeMayaGlm, renderMayaGlm, refreshMayaGlm, selectedGlmModel } from './operationsMayaGlm.js?v=20261025controls1';
+import { initializeMayaGlm, renderMayaGlm, refreshMayaGlm, selectedGlmModel } from './operationsMayaGlm.js?v=20261102stopped1';
 import { initializeBenchmark, setBenchmarkCatalog, refreshBenchmarkLimits } from './operationsBenchmark.js?v=20261025notifications1';
 import { initializeScoreboard, refreshScoreboard } from './operationsScoreboard.js?v=20261025notifications1';
 import { notify, resetNotification } from './operationsNotifications.js?v=20261025notifications1';
@@ -211,14 +211,14 @@ function renderResidency(data) {
   const strata = data.strata || {};
   const host = el('operations-strata-live');
   const reachable = ['ok', 'degraded'].includes(strata.status);
-  const state = !reachable ? 'Unknown — server unreachable' : strata.loaded === true ? 'Loaded in memory' : strata.loaded === false ? 'Unloaded' : 'Residency not reported';
+  const state = strata.status === 'stopped' ? 'Service stopped' : !reachable ? 'Unknown — server unreachable' : strata.loaded === true ? 'Loaded in memory' : strata.loaded === false ? 'Unloaded' : 'Residency not reported';
   host.replaceChildren(node('p', state, 'operations-residency-state'));
-  facts(host, [['Server', reachable ? strata.status === 'ok' ? 'Ready' : 'Degraded' : 'Unavailable'],
+  facts(host, [['Server', reachable ? strata.status === 'ok' ? 'Ready' : 'Degraded' : strata.status === 'stopped' ? 'Stopped' : 'Unavailable'],
     ['Reported model', strata.model], ['Runtime context', tokens(strata.max_context)],
     ['Engine state', strata.state], ['Queued requests', strata.queued],
     ['Generated tokens', strata.activity?.generated],
     ['Request elapsed', Number.isFinite(strata.activity?.elapsed_s) ? `${strata.activity.elapsed_s} s` : 'Not reported']]);
-  if (!reachable) host.append(node('p', strata.message || 'Unable to read live status.', 'operations-error'));
+  if (!reachable && strata.status !== 'stopped') host.append(node('p', strata.message || 'Unable to read live status.', 'operations-error'));
   const dwarfstar = data.dwarfstar || {};
   dwarfstarAliases = dwarfstar.aliases || [];
   const dwarfstarLive = el('operations-dwarfstar-live');
@@ -234,7 +234,7 @@ function renderResidency(data) {
   mayaAliases = maya.aliases || [];
   const mayaLive = el('operations-maya-live');
   mayaLive.replaceChildren(node('p', maya.status === 'ok' ? 'Model loaded; server ready' :
-    maya.status === 'unloaded' ? 'Unloaded' : maya.status === 'disabled' ? 'Not configured' : 'Unavailable or changing state', 'operations-residency-state'));
+    maya.status === 'stopped' ? 'Service stopped' : maya.status === 'unloaded' ? 'Unloaded' : maya.status === 'disabled' ? 'Not configured' : 'Unavailable or changing state', 'operations-residency-state'));
   facts(mayaLive, [['Model', maya.model], ['Runtime context', tokens(maya.max_context)], ['Maya version', maya.version]]);
   mayaLive.append(node('p', maya.message || 'Maya status could not be read.', 'operations-muted'));
   const ollama = data.ollama || {};

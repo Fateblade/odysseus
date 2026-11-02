@@ -70,3 +70,15 @@ def test_unreachable_strata_does_not_claim_unloaded(monkeypatch):
     assert result["strata"]["status"] == "unavailable"
     assert "loaded" not in result["strata"]
     assert result["ollama"]["loaded_available"] is False
+
+
+def test_all_stopped_native_services_report_neutral_residency(monkeypatch):
+    def offline(url):
+        raise OSError("offline")
+    monkeypatch.setattr(overview, "get_json", offline)
+    host = Management(None, "http://strata", "http://ollama", maya_url="http://maya", maya_glm_url="http://glm")
+    host.service_state = lambda name: {"state": "stopped", "active_state": "inactive"}
+    result = host.residency()
+    for name in ("strata", "maya", "maya_glm"):
+        assert result[name]["status"] == "stopped"
+        assert result[name]["loaded"] is False

@@ -44,7 +44,7 @@ export function renderMayaGlm(data) {
   if (!ui) return;
   aliases = data.aliases || [];
   const { node } = ui;
-  ui.live.replaceChildren(node('p', data.status === 'ok' ? 'GLM model loaded; server ready' : data.status === 'unloaded' ? 'Unloaded' : data.status === 'disabled' ? 'Not configured' : 'Stopped, starting or unavailable', 'operations-residency-state'));
+  ui.live.replaceChildren(node('p', data.status === 'ok' ? 'GLM model loaded; server ready' : data.status === 'stopped' ? 'Service stopped' : data.status === 'unloaded' ? 'Unloaded' : data.status === 'disabled' ? 'Not configured' : 'Stopped, starting or unavailable', 'operations-residency-state'));
   ui.live.append(node('p', `Model: ${data.model || 'Not reported'} · Context: ${data.max_context?.toLocaleString() || 'Not reported'} · Maya: ${data.version || 'Not reported'}`, 'operations-muted'));
   ui.live.append(node('p', data.message || '', 'operations-muted'));
 }

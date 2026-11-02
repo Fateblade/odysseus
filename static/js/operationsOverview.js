@@ -237,10 +237,11 @@ function render(data) {
   const services = el('operations-services');
   services.replaceChildren();
   const strata = data.strata || {};
-  const strataCard = service('Strata', strata.loaded === true ? 'Loaded' : strata.loaded === false ? 'Unloaded' : text(strata.status),
-    strata.loaded === false ? 'unloaded' : strata.status, strata.model || strata.message || 'Model unavailable');
-  strataCard.append(facts([['Context tokens', strata.max_context], ['Generation', percentless(strata.generation_tps)], ['Prefill', percentless(strata.prefill_tps)]]));
-  strataCard.append(node('p', `Engine ${text(strata.version)}. ${text(strata.state)}; ${text(strata.queued)} queued.`, 'operations-muted'), action('Manage Strata', 'management'));
+  const strataCard = service('Strata', strata.status === 'stopped' ? 'Stopped' : strata.loaded === true ? 'Loaded' : strata.loaded === false ? 'Unloaded' : text(strata.status),
+    strata.status === 'stopped' ? 'stopped' : strata.loaded === false ? 'unloaded' : strata.status, strata.model || strata.message || 'Model unavailable');
+  if (strata.status !== 'stopped') strataCard.append(facts([['Context tokens', strata.max_context], ['Generation', percentless(strata.generation_tps)], ['Prefill', percentless(strata.prefill_tps)]]));
+  if (strata.status !== 'stopped') strataCard.append(node('p', `Engine ${text(strata.version)}. ${text(strata.state)}; ${text(strata.queued)} queued.`, 'operations-muted'));
+  strataCard.append(action('Manage Strata', 'management'));
   services.append(strataCard);
   const ollama = data.ollama || {};
   const ollamaCard = service('Ollama', ollama.status === 'ok' ? 'Ready' : text(ollama.status), ollama.status,
@@ -255,15 +256,17 @@ function render(data) {
   services.append(dwarfstarCard);
   if (data.maya?.configured) {
     const maya = data.maya;
-    const card = service('Maya', maya.status === 'ok' ? 'Ready' : maya.status === 'unloaded' ? 'Unloaded' : 'Unavailable', maya.status,
+    const card = service('Maya', maya.status === 'ok' ? 'Ready' : maya.status === 'stopped' ? 'Stopped' : maya.status === 'unloaded' ? 'Unloaded' : 'Unavailable', maya.status,
       maya.model || maya.message);
-    card.append(facts([['Context tokens', maya.max_context], ['Version', maya.version]]), action('Manage Maya', 'management'));
+    if (maya.status !== 'stopped') card.append(facts([['Context tokens', maya.max_context], ['Version', maya.version]]));
+    card.append(action('Manage Maya', 'management'));
     services.append(card);
   }
   if (data.maya_glm?.configured) {
     const glm = data.maya_glm;
-    const card = service('Maya GLM', glm.status === 'ok' ? 'Ready' : glm.status === 'unloaded' ? 'Unloaded' : 'Unavailable', glm.status, glm.model || glm.message);
-    card.append(facts([['Context tokens', glm.max_context], ['Version', glm.version]]), action('Manage GLM', 'management'));
+    const card = service('Maya GLM', glm.status === 'ok' ? 'Ready' : glm.status === 'stopped' ? 'Stopped' : glm.status === 'unloaded' ? 'Unloaded' : 'Unavailable', glm.status, glm.model || glm.message);
+    if (glm.status !== 'stopped') card.append(facts([['Context tokens', glm.max_context], ['Version', glm.version]]));
+    card.append(action('Manage GLM', 'management'));
     services.append(card);
   }
   const lite = data.litellm || {};
@@ -317,8 +320,10 @@ async function refresh(manual = false) {
     render(data);
     updateResources(data);
     el('operations-overview-content').hidden = false;
-    const unavailable = ['host', 'containers', 'strata', 'ollama', 'litellm', 'processes', 'storage'].filter(key => data[key]?.status !== 'ok');
-    if (data.dwarfstar?.configured && !['ok', 'stopped'].includes(data.dwarfstar.status)) unavailable.push('dwarfstar');
+    const unavailable = ['host', 'containers', 'strata', 'ollama', 'litellm', 'processes', 'storage'].filter(key => !['ok', 'stopped'].includes(data[key]?.status));
+    for (const backend of ['dwarfstar', 'maya', 'maya_glm']) {
+      if (data[backend]?.configured && !['ok', 'stopped', 'unloaded'].includes(data[backend].status)) unavailable.push(backend);
+    }
     const time = new Date(data.sampled_at * 1000).toLocaleTimeString();
     status.textContent = `${data.demo ? 'Preview data · ' : ''}Updated ${time}${unavailable.length ? ` · unavailable or incomplete: ${unavailable.join(', ')}` : ''}`;
     status.classList.toggle('operations-error', unavailable.length > 0);

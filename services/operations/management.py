@@ -114,13 +114,14 @@ class Management:
         from services.operations.overview import ollama, strata
         from services.operations.maya import inventory as maya_inventory, glm_inventory
 
+        from services.operations.control_state import service_inventory
         with ThreadPoolExecutor(max_workers=6) as executor:
             controls_result = executor.submit(self.control_states)
-            strata_result = executor.submit(strata, self.strata_url)
+            strata_result = executor.submit(service_inventory, self, "strata", strata, self.strata_url)
             ollama_result = executor.submit(ollama, self.ollama_url)
             dwarfstar_result = executor.submit(inventory, self.dwarfstar_url, self)
-            maya_result = executor.submit(maya_inventory, self.maya_url)
-            glm_result = executor.submit(glm_inventory, self.maya_glm_url)
+            maya_result = executor.submit(service_inventory, self, "maya", maya_inventory, self.maya_url)
+            glm_result = executor.submit(service_inventory, self, "maya_glm", glm_inventory, self.maya_glm_url)
             return {"configured": True, "strata": strata_result.result(),
                     "ollama": ollama_result.result(), "dwarfstar": dwarfstar_result.result(), "maya": maya_result.result(), "maya_glm": glm_result.result(), "sampled_at": time.time(), **controls_result.result()}
 
